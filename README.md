@@ -1,4 +1,4 @@
-# Universal Registrar Template / 通用注册机模板
+# Baiqi Register Template / 白起通用注册模板
 
 一个轻量、可改造的注册链路模板。它不内置真实渠道，也不绑定某个邮箱、打码、代理平台；它只提供一套能直接跑的骨架，让你把抓包得到的注册协议链路填进去。
 
@@ -187,4 +187,3 @@ tests/
 ## License
 
 MIT
-

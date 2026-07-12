@@ -2,6 +2,7 @@
 
 import { CartesianCanvas } from "./cartesian-canvas"
 import { type CartesianChartProps, CartesianRoot } from "./cartesian-root"
+export { Area, Line } from "./area"
 
 type Row = Record<string, unknown>
 

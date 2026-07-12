@@ -9,3 +9,9 @@ tmp/
 config.local.json
 *.local.json
 
+dashboard/chat/backend/.venv/
+dashboard/chat/frontend/node_modules/
+dashboard/chat/frontend/dist/
+dashboard/chat/data/sessions/*
+!dashboard/chat/data/sessions/.gitkeep
+dashboard/chat/.env

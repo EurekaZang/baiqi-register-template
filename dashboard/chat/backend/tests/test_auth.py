@@ -44,3 +44,11 @@ def test_login_rejects_invalid_token(monkeypatch):
     r = c.post("/api/auth/login", json={"token": "wrong-token"})
     assert r.status_code == 401
     assert "set-cookie" not in r.headers
+
+
+def test_login_rejects_non_ascii_token_without_server_error(monkeypatch):
+    monkeypatch.setattr(settings, "chat_token", "secret-token")
+    c = TestClient(app, raise_server_exceptions=False)
+    r = c.post("/api/auth/login", json={"token": "é"})
+    assert r.status_code == 401
+    assert "set-cookie" not in r.headers

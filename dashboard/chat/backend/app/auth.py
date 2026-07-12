@@ -14,7 +14,12 @@ class LoginRequest(BaseModel):
 def _is_valid_token(token: str | None) -> bool:
     if not token:
         return False
-    return hmac.compare_digest(token, settings.chat_token)
+    try:
+        token_bytes = token.encode("utf-8")
+        expected_bytes = settings.chat_token.encode("utf-8")
+    except (AttributeError, TypeError, UnicodeError, ValueError):
+        return False
+    return hmac.compare_digest(token_bytes, expected_bytes)
 
 
 def _token_from_authorization(authorization: str | None) -> str | None:

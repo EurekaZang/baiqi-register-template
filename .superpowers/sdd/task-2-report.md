@@ -92,3 +92,29 @@ FAILED tests/test_auth.py::test_sessions_requires_token - AssertionError: assert
 
 - The host environment has `PYTHONPATH` pointing at ROS site-packages, which causes plain `.venv/bin/pytest` to autoload ROS pytest plugins and fail before collection due to missing `lark`. Focused verification used a clean `PYTHONPATH=` for the final test run.
 - FastAPI/Starlette emits a deprecation warning about `httpx` vs `httpx2`; tests pass and this is unrelated to Task 2.
+
+## Important finding fix: non-ASCII login tokens
+
+- Added a regression test for `POST /api/auth/login` with a non-ASCII token (`"é"`) to ensure malformed/non-matching tokens return 401 instead of 500.
+- Root cause reproduced before the production change: the new regression test returned 500 because `hmac.compare_digest(str, str)` raises for non-ASCII strings.
+- Fixed token validation in `dashboard/chat/backend/app/auth.py` by encoding both candidate and configured tokens as UTF-8 bytes before `hmac.compare_digest`, with encoding/type failures treated as invalid tokens.
+- No changes made to `dashboard/server.py` or `index.html`.
+
+Focused test command:
+
+```bash
+cd /home/eureka/baiqi-register-template/dashboard/chat/backend && PYTHONPATH= .venv/bin/pytest tests/test_auth.py -q
+```
+
+Output:
+
+```text
+......                                                                   [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /home/eureka/baiqi-register-template/dashboard/chat/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+6 passed, 1 warning in 0.15s
+```

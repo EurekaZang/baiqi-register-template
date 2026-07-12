@@ -4,6 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Grok Pipeline Dashboard</title>
+<link rel="stylesheet" href="/static/chart/usage-chart.css" />
+<script type="module" src="/static/chart/usage-chart.js"></script>
 <style>
   :root {
     --bg: #f7f8fa;
@@ -196,7 +198,14 @@
     border-radius: 12px;
     padding: 10px 10px 6px;
   }
+  .chart-wrap .usage-chart-root,
+  .chart-wrap #usageChartRoot {
+    width: 100%;
+    height: 280px;
+    display: block;
+  }
   .chart-wrap canvas {
+    /* legacy; island owns canvas internally */
     width: 100%;
     height: 280px;
     display: block;
@@ -449,7 +458,7 @@
       </div>
     </div>
     <div class="chart-wrap">
-      <canvas id="chartMain" width="960" height="280"></canvas>
+      <div id="usageChartRoot" class="usage-chart-root" aria-label="Usage chart"></div>
       <div class="chart-legend" id="usageLegend"></div>
     </div>
     <div class="usage-note" id="usageNote">
@@ -552,6 +561,40 @@ let usageLoading = false;
 let chartSeries = 'usd';
 let lastUsageData = null;
 
+function ensureUsageChartMounted() {
+  const el = $('usageChartRoot');
+  if (!el) return false;
+  if (typeof window.mountUsageChart === 'function') {
+    window.mountUsageChart(el);
+    return true;
+  }
+  return false;
+}
+
+function pushUsageChart(payload) {
+  if (!ensureUsageChartMounted()) {
+    setTimeout(() => {
+      if (ensureUsageChartMounted() && typeof window.updateUsageChart === 'function') {
+        window.updateUsageChart(payload);
+      }
+    }, 50);
+    return;
+  }
+  if (typeof window.updateUsageChart === 'function') {
+    window.updateUsageChart(payload);
+  }
+}
+
+function buildUsageChartPoints(pts, xSpan) {
+  return (pts || []).map(p => ({
+    ts: p.x,
+    label: fmtTimeLabel(p.x, xSpan),
+    value: Number(p.y) || 0,
+  }));
+}
+
+
+
 function fmtAge(ts) {
   if (!ts) return '—';
   const d = Date.now()/1000 - ts;
@@ -640,173 +683,6 @@ function computeHeroUsd(data) {
   };
 }
 
-/** Lightweight multi-series line chart (no external deps). Light theme. */
-function drawLineChart(canvas, seriesList, opts) {
-  opts = opts || {};
-  const dpr = window.devicePixelRatio || 1;
-  const cssW = canvas.clientWidth || 640;
-  const cssH = canvas.clientHeight || 240;
-  canvas.width = Math.floor(cssW * dpr);
-  canvas.height = Math.floor(cssH * dpr);
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cssW, cssH);
-
-  const pad = { l: 54, r: 14, t: 16, b: 28 };
-  const w = cssW - pad.l - pad.r;
-  const h = cssH - pad.t - pad.b;
-  const axis = '#64748b';
-  const grid = '#e5e7eb';
-
-  const allPts = [];
-  seriesList.forEach(s => (s.points || []).forEach(p => allPts.push(p)));
-
-  let minX = opts.minX != null ? opts.minX : null;
-  let maxX = opts.maxX != null ? opts.maxX : null;
-  if (minX == null || maxX == null) {
-    if (!allPts.length) {
-      ctx.fillStyle = axis;
-      ctx.font = '13px Inter, system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(opts.emptyText || 'waiting for samples…', cssW / 2, cssH / 2);
-      return;
-    }
-    minX = Math.min(...allPts.map(p => p.x));
-    maxX = Math.max(...allPts.map(p => p.x));
-  }
-  if (maxX <= minX) maxX = minX + 1;
-  const xSpan = maxX - minX;
-
-  if (!allPts.length) {
-    let minY = opts.minY != null ? opts.minY : 0;
-    let maxY = opts.maxY != null ? opts.maxY : 1;
-    if (minY === maxY) maxY = minY + 1;
-    const yOf0 = (y) => pad.t + h - ((y - minY) / (maxY - minY)) * h;
-    const xOf0 = (x) => pad.l + ((x - minX) / xSpan) * w;
-    ctx.strokeStyle = grid;
-    ctx.fillStyle = axis;
-    ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-    ctx.textAlign = 'right';
-    for (let i = 0; i <= 4; i++) {
-      const yv = minY + (maxY - minY) * (i / 4);
-      const y = yOf0(yv);
-      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + w, y); ctx.stroke();
-      ctx.fillText(opts.yFormat ? opts.yFormat(yv) : String(Math.round(yv)), pad.l - 8, y + 3);
-    }
-    ctx.textAlign = 'center';
-    for (let i = 0; i <= 4; i++) {
-      const xv = minX + xSpan * (i / 4);
-      ctx.fillText(fmtTimeLabel(xv, xSpan), xOf0(xv), pad.t + h + 18);
-    }
-    ctx.font = '13px Inter, system-ui, sans-serif';
-    ctx.fillText(opts.emptyText || 'no samples in this window', cssW / 2, cssH / 2);
-    return;
-  }
-
-  let minY = opts.minY != null ? opts.minY : Math.min(...allPts.map(p => p.y));
-  let maxY = opts.maxY != null ? opts.maxY : Math.max(...allPts.map(p => p.y));
-  if (minY === maxY) { minY = Math.min(0, minY); maxY = maxY + 1; }
-  const span = maxY - minY;
-  maxY = maxY + span * 0.08;
-  if (minY > 0) minY = Math.max(0, minY - span * 0.05);
-
-  const xOf = (x) => pad.l + ((x - minX) / xSpan) * w;
-  const yOf = (y) => pad.t + h - ((y - minY) / (maxY - minY)) * h;
-
-  if (opts.shadeSparse && allPts.length) {
-    const dMin = Math.min(...allPts.map(p => p.x));
-    const dMax = Math.max(...allPts.map(p => p.x));
-    if ((dMax - dMin) < xSpan * 0.85) {
-      ctx.fillStyle = 'rgba(14,165,233,0.05)';
-      ctx.fillRect(xOf(dMin), pad.t, Math.max(2, xOf(dMax) - xOf(dMin)), h);
-    }
-  }
-
-  ctx.strokeStyle = grid;
-  ctx.lineWidth = 1;
-  ctx.fillStyle = axis;
-  ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-  ctx.textAlign = 'right';
-  const yTicks = 4;
-  for (let i = 0; i <= yTicks; i++) {
-    const yv = minY + (maxY - minY) * (i / yTicks);
-    const y = yOf(yv);
-    ctx.beginPath();
-    ctx.moveTo(pad.l, y);
-    ctx.lineTo(pad.l + w, y);
-    ctx.stroke();
-    const label = opts.yFormat ? opts.yFormat(yv) : String(Math.round(yv));
-    ctx.fillText(label, pad.l - 8, y + 3);
-  }
-
-  ctx.textAlign = 'center';
-  const xTicks = Math.min(6, Math.max(2, Math.floor(w / 90)));
-  for (let i = 0; i <= xTicks; i++) {
-    const xv = minX + xSpan * (i / xTicks);
-    ctx.fillText(fmtTimeLabel(xv, xSpan), xOf(xv), pad.t + h + 18);
-  }
-
-  seriesList.forEach(s => {
-    const pts = s.points || [];
-    if (pts.length < 1) return;
-    ctx.strokeStyle = s.color || '#0ea5e9';
-    ctx.lineWidth = s.width || 2;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    if (s.dashed) ctx.setLineDash([5, 4]);
-    else ctx.setLineDash([]);
-    ctx.beginPath();
-    pts.forEach((p, i) => {
-      const x = xOf(p.x), y = yOf(p.y);
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-    if (pts.length === 1 || s.dots || pts.length < 40) {
-      ctx.fillStyle = s.color || '#0ea5e9';
-      pts.forEach(p => {
-        ctx.beginPath();
-        ctx.arc(xOf(p.x), yOf(p.y), pts.length < 15 ? 3.2 : 2.2, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    }
-    ctx.setLineDash([]);
-    if (s.fill && pts.length > 1) {
-      const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + h);
-      grad.addColorStop(0, s.fill);
-      grad.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      pts.forEach((p, i) => {
-        const x = xOf(p.x), y = yOf(p.y);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.lineTo(xOf(pts[pts.length - 1].x), pad.t + h);
-      ctx.lineTo(xOf(pts[0].x), pad.t + h);
-      ctx.closePath();
-      ctx.fill();
-    }
-  });
-
-  if (opts.badge) {
-    ctx.fillStyle = 'rgba(255,255,255,0.95)';
-    ctx.strokeStyle = '#e5e7eb';
-    ctx.lineWidth = 1;
-    ctx.font = '11px Inter, system-ui, sans-serif';
-    const tw = ctx.measureText(opts.badge).width + 12;
-    const bx = pad.l + w - tw;
-    const by = pad.t + 4;
-    ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(bx, by, tw, 18, 6) : ctx.rect(bx, by, tw, 18);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#0f172a';
-    ctx.textAlign = 'left';
-    ctx.fillText(opts.badge, bx + 6, by + 13);
-  }
-}
-
 function setUsageRange(r) {
   usageRange = r;
   document.querySelectorAll('#usageRangeBtns button').forEach(b => {
@@ -831,7 +707,11 @@ function renderUsage(data) {
     $('kpiRate').textContent = '—';
     $('kpiDeltaTok').textContent = '—';
     $('kpiReq').textContent = '—';
-    drawLineChart($('chartMain'), [], { emptyText: (data && data.error) || 'no data' });
+    pushUsageChart({
+      series: chartSeries === 'tokens' ? 'tokens' : 'usd',
+      points: [],
+      emptyText: (data && data.error) || 'no data',
+    });
     $('usageLegend').innerHTML = '';
     return;
   }
@@ -881,29 +761,23 @@ function renderUsage(data) {
   const badge = `per ${Math.round(bucketSec/60)}m · range ${data.range || usageRange}`;
   const axisOpts = { minX: winStart, maxX: winEnd, shadeSparse: true, badge, minY: 0 };
 
+  const xSpan = Math.max(1, winEnd - winStart);
+  const activePts = chartSeries === 'tokens' ? tokenPts : usdPts;
+  const emptyText = '该时间窗内无 15 分钟桶';
+  pushUsageChart({
+    series: chartSeries === 'tokens' ? 'tokens' : 'usd',
+    points: buildUsageChartPoints(activePts, xSpan),
+    emptyText: emptyText,
+    bucketSec: bucketSec,
+    range: data.range || usageRange,
+  });
+
   if (chartSeries === 'tokens') {
-    drawLineChart($('chartMain'), [
-      { points: zeroPts, color: '#94a3b8', width: 1, dashed: true },
-      { points: tokenPts, color: '#0ea5e9', width: 2.2, fill: 'rgba(14,165,233,0.12)', dots: true },
-    ], {
-      ...axisOpts,
-      yFormat: fmtTokens,
-      emptyText: '该时间窗内无 15 分钟桶',
-    });
     $('usageLegend').innerHTML =
-      '<span><i style="background:#0ea5e9"></i>tokens per ' + Math.round(bucketSec/60) + ' min</span>' +
-      '<span><i style="background:#94a3b8"></i>zero baseline</span>';
+      '<span><i style="background:#358ff3"></i>tokens per ' + Math.round(bucketSec/60) + ' min · dither blue</span>';
   } else {
-    drawLineChart($('chartMain'), [
-      { points: zeroPts, color: '#94a3b8', width: 1, dashed: true },
-      { points: usdPts, color: '#16a34a', width: 2.2, fill: 'rgba(22,163,74,0.12)', dots: true },
-    ], {
-      ...axisOpts,
-      yFormat: fmtUsd,
-      emptyText: '该时间窗内无 15 分钟桶',
-    });
     $('usageLegend').innerHTML =
-      '<span><i style="background:#16a34a"></i>USD per ' + Math.round(bucketSec/60) + ' min (commercial)</span>' +
+      '<span><i style="background:#28d26e"></i>USD per ' + Math.round(bucketSec/60) + ' min (commercial) · dither green</span>' +
       '<span><i style="background:#94a3b8"></i>free-tier cash ($0)</span>';
   }
 
@@ -1161,6 +1035,15 @@ function renderAutoRegister(ar) {
   if (ar.watchdog_running) parts.push('watchdog');
   else parts.push('watchdog?');
   if (ar.pending != null) parts.push('pending=' + ar.pending);
+  if (ar.usable != null && ar.target_ok != null) {
+    parts.push('usable=' + ar.usable + '/' + ar.target_ok);
+  } else if (ar.usable != null) {
+    parts.push('usable=' + ar.usable);
+  }
+  if (ar.model_blocked != null) parts.push('blocked=' + ar.model_blocked);
+  if (ar.deps_ok === false) parts.push('deps=DOWN');
+  else if (ar.deps_ok === true) parts.push('deps=ok');
+  if (ar.fail_class) parts.push('class=' + ar.fail_class);
   if (ar.fail_streak) parts.push('fail_streak=' + ar.fail_streak);
   if (ar.last_ok === true) parts.push('last=ok');
   else if (ar.last_ok === false) parts.push('last=FAIL');
@@ -1171,7 +1054,9 @@ function renderAutoRegister(ar) {
     else parts.push('fired ' + Math.floor(age / 3600) + 'h ago');
   }
   el.textContent = parts.join(' · ');
-  el.style.color = (ar.fail_streak > 0 || ar.last_ok === false) ? 'var(--warn)' : 'var(--ok)';
+  el.style.color = (ar.fail_streak > 0 || ar.last_ok === false || ar.deps_ok === false)
+    ? 'var(--warn)'
+    : 'var(--ok)';
 }
 
 async function loadAccounts(force) {
@@ -1234,6 +1119,11 @@ async function tick() {
   await refreshAll();
 }
 initPanels();
+ensureUsageChartMounted();
+window.addEventListener('load', () => {
+  ensureUsageChartMounted();
+  if (lastUsageData) renderUsage(lastUsageData);
+});
 setInterval(tick, 3000);
 setInterval(() => loadAccounts(true), 5000);
 setInterval(() => loadUsage(false), 15000);

@@ -1762,6 +1762,39 @@ def _load_html() -> str:
     return (Path(__file__).parent / "index.html").read_text(encoding="utf-8")
 
 
+_STATIC_ROOT = (DASH_DIR / "static").resolve()
+_STATIC_MIME = {
+    ".js": "text/javascript; charset=utf-8",
+    ".mjs": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".map": "application/json; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".woff2": "font/woff2",
+    ".txt": "text/plain; charset=utf-8",
+}
+
+
+def _safe_static_path(url_path: str) -> Path | None:
+    """Map /static/... to a file under dashboard/static. None if invalid."""
+    raw = url_path[len("/static/") :] if url_path.startswith("/static/") else ""
+    if not raw or raw.startswith("/") or "\\" in raw:
+        return None
+    parts = [p for p in raw.split("/") if p not in ("", ".")]
+    if not parts or any(p == ".." for p in parts):
+        return None
+    candidate = (_STATIC_ROOT.joinpath(*parts)).resolve()
+    try:
+        candidate.relative_to(_STATIC_ROOT)
+    except ValueError:
+        return None
+    if not candidate.is_file():
+        return None
+    return candidate
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -1802,6 +1835,25 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             return
 
+    def _static(self, file_path: Path) -> None:
+        try:
+            data = file_path.read_bytes()
+        except OSError:
+            self._json(404, {"error": "not found"})
+            return
+        ext = file_path.suffix.lower()
+        ctype = _STATIC_MIME.get(ext, "application/octet-stream")
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
+            # Ops dashboard: avoid sticky stale chart bundles after rebuild.
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            return
+
     def _read_json(self) -> dict[str, Any]:
         n = int(self.headers.get("Content-Length") or 0)
         if not n:
@@ -1817,6 +1869,18 @@ class Handler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query or "")
         if path in {"/", "/index.html"}:
             self._html()
+            return
+        if path == "/static" or path.startswith("/static/"):
+            # path is rstrip("/")'d — use original for filename under /static/
+            full = parsed.path
+            if full.rstrip("/") == "/static":
+                self._json(404, {"error": "not found", "path": path})
+                return
+            fp = _safe_static_path(full)
+            if fp is None:
+                self._json(404, {"error": "not found", "path": full})
+                return
+            self._static(fp)
             return
         if path == "/api/overview":
             self._json(200, api_overview())

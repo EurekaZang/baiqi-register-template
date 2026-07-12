@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Grok Pipeline Dashboard</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --panel: #ffffff;
+    --border: #e5e7eb;
+    --text: #0f172a;
+    --muted: #64748b;
+    --accent: #0ea5e9;
+    --ok: #16a34a;
+    --warn: #d97706;
+    --bad: #dc2626;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background-color: var(--bg);
+    background-image: radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.045) 1px, transparent 0);
+    background-size: 20px 20px;
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: rgba(247, 248, 250, 0.92);
+    backdrop-filter: blur(8px);
+    z-index: 10;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+  }
+  header h1 span { color: var(--accent); }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--muted);
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .dot.ok { background: var(--ok); }
+  .dot.bad { background: var(--bad); }
+  .dot.warn { background: var(--warn); }
+  main {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 28px 22px 48px;
+    display: grid;
+    gap: 16px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+  }
+  .card h2, .panel-title {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .hero {
+    padding: 28px 28px 22px;
+  }
+  .hero-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .hero-amount {
+    font-family: var(--mono);
+    font-size: clamp(42px, 8vw, 72px);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  .hero-sub {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  @media (max-width: 980px) {
+    .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  .kpi .n {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+  .kpi .l {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .svc-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .svc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #fff;
+    font-size: 12px;
+  }
+  .svc-chip .name { font-weight: 600; }
+  .svc-chip .lat {
+    font-family: var(--mono);
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .range-btns, .series-btns {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .range-btns button, .series-btns button {
+    padding: 6px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .range-btns button.active, .series-btns button.active {
+    color: var(--text);
+    border-color: var(--accent);
+    background: rgba(14, 165, 233, 0.08);
+  }
+  .chart-wrap {
+    position: relative;
+    background: #fafbfc;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 10px 6px;
+  }
+  .chart-wrap canvas {
+    width: 100%;
+    height: 280px;
+    display: block;
+  }
+  .chart-legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .chart-legend i {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    margin-right: 5px;
+    vertical-align: -1px;
+  }
+  .usage-note {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+  .panel {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .panel > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    user-select: none;
+  }
+  .panel > summary::-webkit-details-marker { display: none; }
+  .panel > summary .chev {
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-right: 8px;
+    display: inline-block;
+    transition: transform 0.12s ease;
+  }
+  .panel[open] > summary .chev { transform: rotate(90deg); }
+  .panel .panel-body {
+    padding: 14px 18px 18px;
+    border-top: 1px solid var(--border);
+  }
+  .panel-sum {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    text-align: right;
+  }
+  .stat-row {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .stat { min-width: 90px; }
+  .stat .n {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.1;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .l {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  td {
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    border: 1px solid var(--border);
+  }
+  .tag.ok {
+    color: var(--ok);
+    border-color: rgba(22, 163, 74, 0.35);
+    background: rgba(22, 163, 74, 0.08);
+  }
+  .tag.bad {
+    color: var(--bad);
+    border-color: rgba(220, 38, 38, 0.35);
+    background: rgba(220, 38, 38, 0.08);
+  }
+  .tag.warn {
+    color: var(--warn);
+    border-color: rgba(217, 119, 6, 0.35);
+    background: rgba(217, 119, 6, 0.08);
+  }
+  .form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  input[type=number] {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #f8fafc;
+    color: var(--text);
+    font-size: 14px;
+    font-family: var(--mono);
+  }
+  input[type=number]:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
+  }
+  .btns { display: flex; gap: 10px; flex-wrap: wrap; }
+  button {
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform .05s ease, opacity .15s;
+  }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-primary {
+    background: #0f172a;
+    color: white;
+  }
+  .btn-danger {
+    background: #dc2626;
+    color: white;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .log {
+    margin-top: 4px;
+    background: #0b1220;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    height: 280px;
+    overflow: auto;
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: #cbd5e1;
+    white-space: pre-wrap;
+  }
+  .log .err { color: #fca5a5; }
+  .log .okline { color: #86efac; }
+  .log .info { color: #7dd3fc; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 20px 10px;
+    font-size: 13px;
+  }
+  .scroll {
+    max-height: 360px;
+    overflow: auto;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Grok</span> Pipeline</h1>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <span class="badge" id="overallBadge"><span class="dot" id="overallDot"></span><span id="overallText">checking…</span></span>
+    <span class="muted" id="lastRefresh">—</span>
+    <button class="btn-ghost" onclick="refreshAll()">Refresh</button>
+  </div>
+</header>
+
+<main>
+  <section class="card hero">
+    <div class="hero-label">Total equiv · 累计等价用量</div>
+    <div class="hero-amount" id="heroTotalUsd">—</div>
+    <div class="hero-sub" id="heroSub">free-tier cash $0 · commercial reference rate</div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="n" id="kpiWindowUsd">—</div><div class="l">window $</div></div>
+      <div class="kpi"><div class="n" id="kpiRate">—</div><div class="l">$/hr</div></div>
+      <div class="kpi"><div class="n" id="kpiDeltaTok">—</div><div class="l">Σ tokens</div></div>
+      <div class="kpi"><div class="n" id="kpiPool">—</div><div class="l">pool ok/block</div></div>
+      <div class="kpi"><div class="n" id="kpiReq">—</div><div class="l">req ok/fail</div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Services</h2>
+    <div class="svc-strip" id="svcList"><div class="empty">loading…</div></div>
+  </section>
+
+  <section class="card">
+    <div class="toolbar">
+      <h2 style="margin:0;">Usage</h2>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <div class="series-btns" id="chartSeriesBtns">
+          <button data-series="usd" class="active" onclick="setChartSeries('usd')">USD</button>
+          <button data-series="tokens" onclick="setChartSeries('tokens')">Tokens</button>
+        </div>
+        <div class="range-btns" id="usageRangeBtns">
+          <button data-range="1h" onclick="setUsageRange('1h')">1h</button>
+          <button data-range="6h" onclick="setUsageRange('6h')">6h</button>
+          <button data-range="24h" class="active" onclick="setUsageRange('24h')">24h</button>
+          <button data-range="7d" onclick="setUsageRange('7d')">7d</button>
+          <button data-range="all" onclick="setUsageRange('all')">all</button>
+        </div>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chartMain" width="960" height="280"></canvas>
+      <div class="chart-legend" id="usageLegend"></div>
+    </div>
+    <div class="usage-note" id="usageNote">
+      主曲线 = 每 15 分钟用量（网关累计差分）。Free 真实扣费 $0；USD 为商业参考价。
+    </div>
+  </section>
+
+  <details class="panel" id="panelPool" data-panel="pool">
+    <summary>
+      <span class="panel-title"><span class="chev">▸</span> Account pool</span>
+      <span class="panel-sum" id="sumPool">—</span>
+    </summary>
+    <div class="panel-body">
+      <div class="stat-row">
+        <div class="stat"><div class="n" id="accTotal">—</div><div class="l">total</div></div>
+        <div class="stat"><div class="n" id="accActive">—</div><div class="l">OK</div></div>
+        <div class="stat"><div class="n" id="accExhausted">—</div><div class="l">blocked</div></div>
+      </div>
+      <div class="muted" style="margin-top:12px;" id="accMode">mode: —</div>
+      <div class="muted" id="accQuotaNote">pool: —</div>
+      <div class="btns" style="margin-top:14px;">
+        <button class="btn-ghost" onclick="loadAccounts(true)">Reload accounts</button>
+      </div>
+    </div>
+  </details>
+
+  <details class="panel" id="panelReg" data-panel="reg">
+    <summary>
+      <span class="panel-title"><span class="chev">▸</span> Registration</span>
+      <span class="panel-sum" id="sumReg">idle</span>
+    </summary>
+    <div class="panel-body">
+      <div class="form">
+        <div>
+          <label for="count">Accounts</label>
+          <input type="number" id="count" min="1" max="50" value="3" />
+        </div>
+        <div>
+          <label for="workers">Workers</label>
+          <input type="number" id="workers" min="1" max="10" value="2" />
+        </div>
+      </div>
+      <div class="btns">
+        <button class="btn-primary" id="btnStart" onclick="startRegister()">Start</button>
+        <button class="btn-danger" id="btnStop" onclick="stopRegister()" disabled>Stop</button>
+      </div>
+      <div class="muted" style="margin-top:12px;" id="regStatus">idle</div>
+      <div class="muted" style="margin-top:8px;" id="autoRegStatus">auto-register: —</div>
+    </div>
+  </details>
+
+  <details class="panel" id="panelAccounts" data-panel="accounts">
+    <summary>
+      <span class="panel-title"><span class="chev">▸</span> Accounts table</span>
+      <span class="panel-sum" id="sumAccounts">—</span>
+    </summary>
+    <div class="panel-body">
+      <div class="toolbar" style="margin-bottom:8px;">
+        <span class="muted" id="accFetched">—</span>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Email</th>
+              <th>User ID</th>
+              <th>Expires</th>
+              <th>Refresh</th>
+              <th>Blocked models</th>
+              <th>Quota / note</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="accBody">
+            <tr><td colspan="8" class="empty">loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+
+  <details class="panel" id="panelLog" data-panel="log">
+    <summary>
+      <span class="panel-title"><span class="chev">▸</span> Registration log</span>
+      <span class="panel-sum" id="sumLog">0 lines</span>
+    </summary>
+    <div class="panel-body">
+      <div class="muted" id="logMeta" style="margin-bottom:8px;">0 lines</div>
+      <div class="log" id="logBox">waiting for registration…</div>
+    </div>
+  </details>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let accountsLoaded = false;
+let usageRange = '24h';
+let usageLoading = false;
+let chartSeries = 'usd';
+let lastUsageData = null;
+
+function fmtAge(ts) {
+  if (!ts) return '—';
+  const d = Date.now()/1000 - ts;
+  if (d < 5) return 'just now';
+  if (d < 60) return Math.floor(d) + 's ago';
+  if (d < 3600) return Math.floor(d/60) + 'm ago';
+  return Math.floor(d/3600) + 'h ago';
+}
+
+function fmtTokens(n) {
+  if (n == null || Number.isNaN(n)) return '—';
+  n = Number(n);
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(Math.round(n));
+}
+
+function fmtUsd(n) {
+  if (n == null || Number.isNaN(n)) return '—';
+  n = Number(n);
+  if (Math.abs(n) >= 1000) return '$' + n.toFixed(0);
+  if (Math.abs(n) >= 10) return '$' + n.toFixed(2);
+  return '$' + n.toFixed(4);
+}
+
+function fmtUsdHero(n) {
+  if (n == null || Number.isNaN(n)) return '—';
+  n = Number(n);
+  const abs = Math.abs(n);
+  const opts = abs >= 100
+    ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+    : { minimumFractionDigits: 2, maximumFractionDigits: 4 };
+  return '$' + n.toLocaleString('en-US', opts);
+}
+
+function fmtTimeLabel(ts, spanSec) {
+  const d = new Date(ts * 1000);
+  const pad = (x) => String(x).padStart(2, '0');
+  const hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  if (spanSec != null && spanSec > 6 * 3600) {
+    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
+  }
+  return hm;
+}
+
+function fmtDuration(sec) {
+  if (sec == null || Number.isNaN(sec)) return '—';
+  sec = Math.max(0, Number(sec));
+  if (sec < 60) return Math.round(sec) + 's';
+  if (sec < 3600) return Math.round(sec / 60) + 'm';
+  if (sec < 86400) return (sec / 3600).toFixed(1) + 'h';
+  return (sec / 86400).toFixed(1) + 'd';
+}
+
+function computeHeroUsd(data) {
+  const latest = (data && data.latest) || {};
+  const pricing = (data && data.pricing) || {};
+  const totals = (data && data.totals) || {};
+  const blended = Number(pricing.usd_per_m_tokens != null ? pricing.usd_per_m_tokens : 5);
+  const pin = Number(pricing.usd_input_per_m != null ? pricing.usd_input_per_m : 3);
+  const pout = Number(pricing.usd_output_per_m != null ? pricing.usd_output_per_m : 15);
+
+  if (totals.usd_equiv_cum != null && Number.isFinite(Number(totals.usd_equiv_cum))) {
+    return {
+      usd: Number(totals.usd_equiv_cum),
+      tokens: totals.tokens_cum != null ? Number(totals.tokens_cum) : null,
+      mode: totals.price_mode || 'totals',
+      pin, pout, blended,
+    };
+  }
+
+  const cum = Number(
+    latest.tokens_cum_total != null ? latest.tokens_cum_total
+      : (latest.tokens_cum != null ? latest.tokens_cum : NaN)
+  );
+  if (!Number.isFinite(cum) || cum < 0) {
+    return { usd: null, tokens: null, mode: 'none', pin, pout, blended };
+  }
+  // per_15m latest.prompt/comp are bucket deltas — never use for hero total.
+  return {
+    usd: (cum / 1e6) * blended,
+    tokens: cum,
+    mode: 'blended_cum',
+    pin, pout, blended,
+  };
+}
+
+/** Lightweight multi-series line chart (no external deps). Light theme. */
+function drawLineChart(canvas, seriesList, opts) {
+  opts = opts || {};
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 640;
+  const cssH = canvas.clientHeight || 240;
+  canvas.width = Math.floor(cssW * dpr);
+  canvas.height = Math.floor(cssH * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const pad = { l: 54, r: 14, t: 16, b: 28 };
+  const w = cssW - pad.l - pad.r;
+  const h = cssH - pad.t - pad.b;
+  const axis = '#64748b';
+  const grid = '#e5e7eb';
+
+  const allPts = [];
+  seriesList.forEach(s => (s.points || []).forEach(p => allPts.push(p)));
+
+  let minX = opts.minX != null ? opts.minX : null;
+  let maxX = opts.maxX != null ? opts.maxX : null;
+  if (minX == null || maxX == null) {
+    if (!allPts.length) {
+      ctx.fillStyle = axis;
+      ctx.font = '13px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(opts.emptyText || 'waiting for samples…', cssW / 2, cssH / 2);
+      return;
+    }
+    minX = Math.min(...allPts.map(p => p.x));
+    maxX = Math.max(...allPts.map(p => p.x));
+  }
+  if (maxX <= minX) maxX = minX + 1;
+  const xSpan = maxX - minX;
+
+  if (!allPts.length) {
+    let minY = opts.minY != null ? opts.minY : 0;
+    let maxY = opts.maxY != null ? opts.maxY : 1;
+    if (minY === maxY) maxY = minY + 1;
+    const yOf0 = (y) => pad.t + h - ((y - minY) / (maxY - minY)) * h;
+    const xOf0 = (x) => pad.l + ((x - minX) / xSpan) * w;
+    ctx.strokeStyle = grid;
+    ctx.fillStyle = axis;
+    ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+      const yv = minY + (maxY - minY) * (i / 4);
+      const y = yOf0(yv);
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + w, y); ctx.stroke();
+      ctx.fillText(opts.yFormat ? opts.yFormat(yv) : String(Math.round(yv)), pad.l - 8, y + 3);
+    }
+    ctx.textAlign = 'center';
+    for (let i = 0; i <= 4; i++) {
+      const xv = minX + xSpan * (i / 4);
+      ctx.fillText(fmtTimeLabel(xv, xSpan), xOf0(xv), pad.t + h + 18);
+    }
+    ctx.font = '13px Inter, system-ui, sans-serif';
+    ctx.fillText(opts.emptyText || 'no samples in this window', cssW / 2, cssH / 2);
+    return;
+  }
+
+  let minY = opts.minY != null ? opts.minY : Math.min(...allPts.map(p => p.y));
+  let maxY = opts.maxY != null ? opts.maxY : Math.max(...allPts.map(p => p.y));
+  if (minY === maxY) { minY = Math.min(0, minY); maxY = maxY + 1; }
+  const span = maxY - minY;
+  maxY = maxY + span * 0.08;
+  if (minY > 0) minY = Math.max(0, minY - span * 0.05);
+
+  const xOf = (x) => pad.l + ((x - minX) / xSpan) * w;
+  const yOf = (y) => pad.t + h - ((y - minY) / (maxY - minY)) * h;
+
+  if (opts.shadeSparse && allPts.length) {
+    const dMin = Math.min(...allPts.map(p => p.x));
+    const dMax = Math.max(...allPts.map(p => p.x));
+    if ((dMax - dMin) < xSpan * 0.85) {
+      ctx.fillStyle = 'rgba(14,165,233,0.05)';
+      ctx.fillRect(xOf(dMin), pad.t, Math.max(2, xOf(dMax) - xOf(dMin)), h);
+    }
+  }
+
+  ctx.strokeStyle = grid;
+  ctx.lineWidth = 1;
+  ctx.fillStyle = axis;
+  ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+  ctx.textAlign = 'right';
+  const yTicks = 4;
+  for (let i = 0; i <= yTicks; i++) {
+    const yv = minY + (maxY - minY) * (i / yTicks);
+    const y = yOf(yv);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y);
+    ctx.lineTo(pad.l + w, y);
+    ctx.stroke();
+    const label = opts.yFormat ? opts.yFormat(yv) : String(Math.round(yv));
+    ctx.fillText(label, pad.l - 8, y + 3);
+  }
+
+  ctx.textAlign = 'center';
+  const xTicks = Math.min(6, Math.max(2, Math.floor(w / 90)));
+  for (let i = 0; i <= xTicks; i++) {
+    const xv = minX + xSpan * (i / xTicks);
+    ctx.fillText(fmtTimeLabel(xv, xSpan), xOf(xv), pad.t + h + 18);
+  }
+
+  seriesList.forEach(s => {
+    const pts = s.points || [];
+    if (pts.length < 1) return;
+    ctx.strokeStyle = s.color || '#0ea5e9';
+    ctx.lineWidth = s.width || 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    if (s.dashed) ctx.setLineDash([5, 4]);
+    else ctx.setLineDash([]);
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      const x = xOf(p.x), y = yOf(p.y);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    if (pts.length === 1 || s.dots || pts.length < 40) {
+      ctx.fillStyle = s.color || '#0ea5e9';
+      pts.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(xOf(p.x), yOf(p.y), pts.length < 15 ? 3.2 : 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+    ctx.setLineDash([]);
+    if (s.fill && pts.length > 1) {
+      const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + h);
+      grad.addColorStop(0, s.fill);
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      pts.forEach((p, i) => {
+        const x = xOf(p.x), y = yOf(p.y);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.lineTo(xOf(pts[pts.length - 1].x), pad.t + h);
+      ctx.lineTo(xOf(pts[0].x), pad.t + h);
+      ctx.closePath();
+      ctx.fill();
+    }
+  });
+
+  if (opts.badge) {
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 1;
+    ctx.font = '11px Inter, system-ui, sans-serif';
+    const tw = ctx.measureText(opts.badge).width + 12;
+    const bx = pad.l + w - tw;
+    const by = pad.t + 4;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(bx, by, tw, 18, 6) : ctx.rect(bx, by, tw, 18);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'left';
+    ctx.fillText(opts.badge, bx + 6, by + 13);
+  }
+}
+
+function setUsageRange(r) {
+  usageRange = r;
+  document.querySelectorAll('#usageRangeBtns button').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-range') === r);
+  });
+  loadUsage(true);
+}
+
+function setChartSeries(s) {
+  chartSeries = (s === 'tokens') ? 'tokens' : 'usd';
+  document.querySelectorAll('#chartSeriesBtns button').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-series') === chartSeries);
+  });
+  if (lastUsageData) renderUsage(lastUsageData);
+}
+
+function renderUsage(data) {
+  if (!data || !data.ok) {
+    $('heroTotalUsd').textContent = '—';
+    $('heroSub').textContent = (data && data.error) || 'usage unavailable';
+    $('kpiWindowUsd').textContent = '—';
+    $('kpiRate').textContent = '—';
+    $('kpiDeltaTok').textContent = '—';
+    $('kpiReq').textContent = '—';
+    drawLineChart($('chartMain'), [], { emptyText: (data && data.error) || 'no data' });
+    $('usageLegend').innerHTML = '';
+    return;
+  }
+
+  lastUsageData = data;
+  const latest = data.latest || {};
+  const deltas = data.deltas || {};
+  const price = (data.pricing && data.pricing.usd_per_m_tokens) || 5;
+  const pin = (data.pricing && data.pricing.usd_input_per_m) || 3;
+  const pout = (data.pricing && data.pricing.usd_output_per_m) || 15;
+  const bucketSec = data.bucket_sec || 900;
+
+  const hero = computeHeroUsd(data);
+  $('heroTotalUsd').textContent = fmtUsdHero(hero.usd);
+  if (hero.usd == null) {
+    $('heroSub').textContent = 'tracking not ready · free-tier cash $0';
+  } else {
+    $('heroSub').textContent =
+      'free-tier cash $0 · ' + fmtTokens(hero.tokens) + ' tokens · blended $' +
+      hero.blended + '/M (in $' + hero.pin + '/M · out $' + hero.pout + '/M)';
+  }
+
+  $('kpiWindowUsd').textContent = fmtUsd(deltas.delta_usd || 0);
+  $('kpiRate').textContent = fmtUsd(deltas.rate_usd_per_hour || 0) + '/h';
+  $('kpiDeltaTok').textContent = '+' + fmtTokens(deltas.delta_tokens || 0);
+  const ok = latest.success_count, fail = latest.fail_count;
+  $('kpiReq').textContent = (ok != null) ? (ok + '/' + (fail || 0)) : '—';
+
+  const series = data.series || [];
+  const nowTs = data.window_end || data.ts || (Date.now() / 1000);
+  const winStart = data.window_start != null ? data.window_start : (nowTs - 3600);
+  const winEnd = data.window_end != null ? data.window_end : nowTs;
+
+  const tokenPts = series.map(p => ({
+    x: p.ts,
+    y: Number(p.tokens_15m != null ? p.tokens_15m : (p.tokens_actual || 0)),
+  }));
+  const usdPts = series.map(p => ({
+    x: p.ts,
+    y: Number(p.usd_15m != null ? p.usd_15m : (p.usd_equiv || 0)),
+  }));
+  const zeroPts = [
+    { x: winStart, y: 0 },
+    { x: winEnd, y: 0 },
+  ];
+
+  const badge = `per ${Math.round(bucketSec/60)}m · range ${data.range || usageRange}`;
+  const axisOpts = { minX: winStart, maxX: winEnd, shadeSparse: true, badge, minY: 0 };
+
+  if (chartSeries === 'tokens') {
+    drawLineChart($('chartMain'), [
+      { points: zeroPts, color: '#94a3b8', width: 1, dashed: true },
+      { points: tokenPts, color: '#0ea5e9', width: 2.2, fill: 'rgba(14,165,233,0.12)', dots: true },
+    ], {
+      ...axisOpts,
+      yFormat: fmtTokens,
+      emptyText: '该时间窗内无 15 分钟桶',
+    });
+    $('usageLegend').innerHTML =
+      '<span><i style="background:#0ea5e9"></i>tokens per ' + Math.round(bucketSec/60) + ' min</span>' +
+      '<span><i style="background:#94a3b8"></i>zero baseline</span>';
+  } else {
+    drawLineChart($('chartMain'), [
+      { points: zeroPts, color: '#94a3b8', width: 1, dashed: true },
+      { points: usdPts, color: '#16a34a', width: 2.2, fill: 'rgba(22,163,74,0.12)', dots: true },
+    ], {
+      ...axisOpts,
+      yFormat: fmtUsd,
+      emptyText: '该时间窗内无 15 分钟桶',
+    });
+    $('usageLegend').innerHTML =
+      '<span><i style="background:#16a34a"></i>USD per ' + Math.round(bucketSec/60) + ' min (commercial)</span>' +
+      '<span><i style="background:#94a3b8"></i>free-tier cash ($0)</span>';
+  }
+
+  const n = data.point_count || series.length;
+  const yMax = tokenPts.length ? Math.max(0, ...tokenPts.map(p => p.y)) : 0;
+  let tip = '';
+  if (data.tracking_started_at) {
+    const ts = new Date(data.tracking_started_at * 1000);
+    const pad = (x) => String(x).padStart(2, '0');
+    tip += ` 记账自 ${pad(ts.getHours())}:${pad(ts.getMinutes())} 起；此前无法填入 15 分钟桶。`;
+  }
+  if (data.data_span_sec != null && data.window_sec && data.data_span_sec < data.window_sec * 0.5) {
+    tip += ` 有采样仅 ${fmtDuration(data.data_span_sec)}，短于所选 ${data.range}，有值的桶会集中在右侧。`;
+  } else if (yMax === 0 && (deltas.delta_tokens || 0) === 0) {
+    tip += ' 窗口内各 15 分钟桶用量均为 0（无成功 completion 或尚未差分出增量）。';
+  }
+  if (data.pre_tracking_note) tip += ' ' + data.pre_tracking_note;
+  $('usageNote').textContent =
+    `模式 每${Math.round(bucketSec/60)}分钟 · 窗口 ${fmtDuration(data.window_sec)} · ${n} buckets` +
+    ` · Free 真实 $0 · in $${pin}/M out $${pout}/M · blended $${price}/M` +
+    ` · 窗口合计 +${fmtTokens(deltas.delta_tokens || 0)} tokens · ${fmtUsd(deltas.rate_usd_per_hour || 0)}/hr` +
+    tip;
+}
+
+let usageReqId = 0;
+async function loadUsage(force) {
+  if (usageLoading && !force) return;
+  const reqId = ++usageReqId;
+  const rangeSnap = usageRange;
+  usageLoading = true;
+  try {
+    const data = await jget('/api/usage?range=' + encodeURIComponent(rangeSnap));
+    if (reqId !== usageReqId) return;
+    renderUsage(data);
+  } catch (e) {
+    if (reqId !== usageReqId) return;
+    renderUsage({ ok: false, error: String(e) });
+  } finally {
+    if (reqId === usageReqId) usageLoading = false;
+  }
+}
+
+function fmtExpires(exp) {
+  if (!exp) return '—';
+  const left = exp - Date.now()/1000;
+  if (left < 0) return 'expired';
+  if (left < 3600) return Math.floor(left/60) + 'm';
+  if (left < 86400) return Math.floor(left/3600) + 'h';
+  return Math.floor(left/86400) + 'd';
+}
+
+function setOverall(ok, text) {
+  $('overallDot').className = 'dot ' + (ok ? 'ok' : 'bad');
+  $('overallText').textContent = text;
+}
+
+async function jget(url) {
+  const r = await fetch(url, { cache: 'no-store' });
+  return r.json();
+}
+async function jpost(url, body) {
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+  return r.json();
+}
+
+function renderServices(data) {
+  const list = $('svcList');
+  if (!data || !data.services) {
+    list.innerHTML = '<div class="empty">failed to load</div>';
+    return;
+  }
+  list.innerHTML = data.services.map(s => {
+    const cls = s.ok ? 'ok' : (s.critical ? 'bad' : 'warn');
+    const lat = s.ok ? (s.latency_ms + 'ms') : 'down';
+    return `<div class="svc-chip" title="${escapeHtml(s.desc || '')}">
+      <span class="dot ${cls}"></span>
+      <span class="name">${escapeHtml(s.name)}</span>
+      <span class="lat">${lat}</span>
+    </div>`;
+  }).join('');
+  setOverall(data.ok, data.ok ? 'all critical up' : 'service down');
+  $('lastRefresh').textContent = 'updated ' + fmtAge(data.checked_at);
+}
+
+function renderAccounts(data) {
+  if (!data || !data.ok) {
+    $('accTotal').textContent = '—';
+    $('accActive').textContent = '—';
+    $('accExhausted').textContent = '—';
+    $('accMode').textContent = 'mode: ' + (data && data.error ? data.error : 'unavailable');
+    $('accBody').innerHTML = `<tr><td colspan="8" class="empty">${data && data.error ? data.error : 'failed'}</td></tr>`;
+    if ($('sumPool')) $('sumPool').textContent = 'unavailable';
+    if ($('sumAccounts')) $('sumAccounts').textContent = '—';
+    return;
+  }
+  const ss = data.status_summary || {};
+  const qs = data.quota_summary || {};
+  const ps = data.pool_summary || {};
+  const total = data.account_count ?? data.accounts?.length ?? 0;
+  const okN = ss.ok ?? qs.active_ok_count ?? 0;
+  const blockedN = ss.blocked ?? qs.blocked_count ?? ps.model_blocked ?? 0;
+  $('accTotal').textContent = total;
+  $('accActive').textContent = okN;
+  $('accExhausted').textContent = blockedN;
+  const exhEl = $('accExhausted');
+  if (exhEl) exhEl.style.color = blockedN > 0 ? 'var(--bad)' : '';
+  const actEl = $('accActive');
+  if (actEl) actEl.style.color = okN === 0 && total > 0 ? 'var(--bad)' : 'var(--ok)';
+
+  $('accMode').textContent = 'mode: ' + (data.account_mode || '—');
+  const parts = [];
+  if (ss.ok != null) parts.push('ok=' + ss.ok);
+  if (ss.blocked != null) parts.push('blocked=' + ss.blocked);
+  if (ss.cooldown != null) parts.push('cooldown=' + ss.cooldown);
+  if (ss.disabled != null) parts.push('disabled=' + ss.disabled);
+  if (ps.in_cooldown != null) parts.push('pool_cool=' + ps.in_cooldown);
+  if (qs.error) parts.push('quota_err=' + qs.error);
+  $('accQuotaNote').textContent = parts.length ? parts.join(' · ') : 'pool: —';
+  $('accFetched').textContent = 'fetched ' + fmtAge(data.fetched_at);
+
+  if ($('kpiPool')) $('kpiPool').textContent = okN + '/' + blockedN;
+  if ($('sumPool')) $('sumPool').textContent = total + ' total · ' + okN + ' ok · ' + blockedN + ' blocked';
+  if ($('sumAccounts')) $('sumAccounts').textContent = total + ' rows';
+
+  const rows = (data.accounts || []).map((a, i) => {
+    const q = a.quota || {};
+    const blocked = a.blocked_model_ids || [];
+    const stClass = a.status_class || (a.expired ? 'bad' : 'ok');
+    const stLabel = a.status_label || (a.expired ? 'expired' : 'ok');
+    const stReason = a.status_reason || a.last_error || '';
+    const qtag = q.exhausted || a.status === 'blocked' ? 'bad'
+      : (a.status === 'cooldown' || a.status === 'probe_fail' ? 'warn'
+        : (q.unlimited_or_free || a.status === 'ok' ? 'ok' : 'warn'));
+    let qtext = q.summary;
+    if (!qtext) {
+      if (q.exhausted) qtext = 'exhausted';
+      else if (q.unlimited_or_free) qtext = 'free';
+      else if (a.status === 'ok') qtext = 'available';
+      else if (a.status === 'probe_fail') qtext = 'probe failed';
+      else if (a.status === 'cooldown') qtext = 'cooldown';
+      else if (a.status === 'blocked') qtext = 'blocked';
+      else qtext = 'n/a';
+    }
+    const blockedHtml = blocked.length
+      ? `<span class="tag bad" title="${escapeHtml(stReason)}">${escapeHtml(blocked.join(', '))}</span>`
+      : '<span class="muted">—</span>';
+    const stats = (a.request_count != null)
+      ? ` <span class="muted" title="req/ok/fail">(${a.success_count || 0}/${a.fail_count || 0})</span>`
+      : '';
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${a.email ? escapeHtml(a.email) : '<span class="muted">—</span>'}</td>
+      <td title="${escapeHtml(a.user_id || '')}">${escapeHtml((a.user_id || '').slice(0,12) || '—')}</td>
+      <td>${fmtExpires(a.expires_at)}</td>
+      <td>${a.has_refresh_token ? '✓' : '✗'}</td>
+      <td>${blockedHtml}</td>
+      <td><span class="tag ${qtag}" title="${escapeHtml(stReason)}">${escapeHtml(qtext)}</span></td>
+      <td><span class="tag ${stClass}" title="${escapeHtml(stReason)}">${escapeHtml(stLabel)}</span>${stats}</td>
+    </tr>`;
+  }).join('');
+  $('accBody').innerHTML = rows || '<tr><td colspan="8" class="empty">no accounts</td></tr>';
+}
+
+function colorizeLog(lines) {
+  return (lines || []).map(line => {
+    let cls = '';
+    if (/error|failed|exception|traceback/i.test(line)) cls = 'err';
+    else if (/ok=True|success|imported|done ok=/i.test(line)) cls = 'okline';
+    else if (/INFO|pushing|start/i.test(line)) cls = 'info';
+    return cls ? `<span class="${cls}">${escapeHtml(line)}</span>` : escapeHtml(line);
+  }).join('\n');
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+const PANEL_KEYS = ['pool', 'reg', 'accounts', 'log'];
+
+function panelEl(key) {
+  return document.querySelector('details.panel[data-panel="' + key + '"]');
+}
+
+function initPanels() {
+  PANEL_KEYS.forEach(key => {
+    const el = panelEl(key);
+    if (!el) return;
+    const saved = localStorage.getItem('dash.panel.' + key);
+    if (saved === '1') el.open = true;
+    if (saved === '0') el.open = false;
+    el.addEventListener('toggle', () => {
+      localStorage.setItem('dash.panel.' + key, el.open ? '1' : '0');
+    });
+  });
+}
+
+function ensurePanelOpen(key) {
+  const el = panelEl(key);
+  if (el && !el.open) el.open = true;
+}
+
+function renderRegister(st) {
+  const running = !!st.running;
+  $('btnStart').disabled = running;
+  $('btnStop').disabled = !running;
+  let text = 'idle';
+  if (running) {
+    text = `running · count=${st.count} workers=${st.workers} pid=${st.pid || '?'}`;
+    if (st.source) text += ` · source=${st.source}`;
+  } else if (st.finished_at) {
+    text = `finished · exit=${st.exit_code} · count=${st.count} workers=${st.workers}`;
+    if (st.output_dir) text += ` · ${st.output_dir}`;
+  }
+  if (st.queued) text += ` · queued=${st.queued}`;
+  if (st.error) text += ' · error: ' + st.error;
+  $('regStatus').textContent = text;
+  if ($('sumReg')) $('sumReg').textContent = text;
+
+  const lines = st.log_tail || [];
+  const lineCount = st.log_line_count || 0;
+  $('logMeta').textContent = lineCount + ' lines';
+  if ($('sumLog')) $('sumLog').textContent = lineCount + ' lines';
+  const box = $('logBox');
+  const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 20;
+  box.innerHTML = lines.length ? colorizeLog(lines) : 'waiting for registration…';
+  if (atBottom || running) box.scrollTop = box.scrollHeight;
+
+  if (running) {
+    ensurePanelOpen('reg');
+    ensurePanelOpen('log');
+  }
+}
+
+function renderAutoRegister(ar) {
+  const el = $('autoRegStatus');
+  if (!el) return;
+  if (!ar || !ar.ok) {
+    el.textContent = 'auto-register: unavailable' + (ar && ar.error ? ' · ' + ar.error : '');
+    el.style.color = 'var(--warn)';
+    return;
+  }
+  if (!ar.enabled) {
+    el.textContent = 'auto-register: DISABLED';
+    el.style.color = 'var(--bad)';
+    return;
+  }
+  const parts = ['auto-register: ON'];
+  if (ar.watchdog_running) parts.push('watchdog');
+  else parts.push('watchdog?');
+  if (ar.pending != null) parts.push('pending=' + ar.pending);
+  if (ar.fail_streak) parts.push('fail_streak=' + ar.fail_streak);
+  if (ar.last_ok === true) parts.push('last=ok');
+  else if (ar.last_ok === false) parts.push('last=FAIL');
+  if (ar.last_fire_at) {
+    const age = Math.max(0, Date.now() / 1000 - ar.last_fire_at);
+    if (age < 60) parts.push('fired ' + Math.floor(age) + 's ago');
+    else if (age < 3600) parts.push('fired ' + Math.floor(age / 60) + 'm ago');
+    else parts.push('fired ' + Math.floor(age / 3600) + 'h ago');
+  }
+  el.textContent = parts.join(' · ');
+  el.style.color = (ar.fail_streak > 0 || ar.last_ok === false) ? 'var(--warn)' : 'var(--ok)';
+}
+
+async function loadAccounts(force) {
+  if (accountsLoaded && !force) return;
+  try {
+    const data = await jget('/api/accounts');
+    renderAccounts(data);
+    accountsLoaded = true;
+  } catch (e) {
+    renderAccounts({ ok: false, error: String(e) });
+  }
+}
+
+async function refreshAll() {
+  try {
+    const ov = await jget('/api/overview');
+    renderServices(ov.services);
+    if (ov.accounts && ov.accounts.ok) {
+      if (!accountsLoaded) {
+        $('accTotal').textContent = ov.accounts.account_count ?? '—';
+        $('accMode').textContent = 'mode: ' + (ov.accounts.account_mode || '—');
+        if (ov.accounts.model_blocked != null) {
+          $('accExhausted').textContent = ov.accounts.model_blocked;
+          $('accExhausted').style.color = ov.accounts.model_blocked > 0 ? 'var(--bad)' : '';
+        }
+      }
+    }
+    renderRegister(ov.register || {});
+    renderAutoRegister(ov.auto_register || {});
+  } catch (e) {
+    setOverall(false, 'dashboard error');
+  }
+  if (!accountsLoaded) await loadAccounts(true);
+}
+
+async function startRegister() {
+  const count = parseInt($('count').value || '1', 10);
+  const workers = parseInt($('workers').value || '1', 10);
+  $('btnStart').disabled = true;
+  try {
+    const res = await jpost('/api/register/start', { count, workers });
+    renderRegister(res.status || {});
+    if (!res.ok) alert(res.error || 'start failed');
+  } catch (e) {
+    alert(String(e));
+  }
+}
+
+async function stopRegister() {
+  try {
+    const res = await jpost('/api/register/stop', {});
+    renderRegister(res.status || {});
+  } catch (e) {
+    alert(String(e));
+  }
+}
+
+// poll loop: overview every 3s, accounts every 5s, usage every 15s
+async function tick() {
+  await refreshAll();
+}
+initPanels();
+setInterval(tick, 3000);
+setInterval(() => loadAccounts(true), 5000);
+setInterval(() => loadUsage(false), 15000);
+window.addEventListener('resize', () => {
+  if (lastUsageData) renderUsage(lastUsageData);
+  else loadUsage(false);
+});
+tick().then(() => loadAccounts(true)).then(() => loadUsage(true));
+</script>
+</body>
+</html>

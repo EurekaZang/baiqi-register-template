@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { Boxes, Copy, RotateCcw } from 'lucide-react'
+import { motion, useReducedMotion } from 'motion/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Message, ToolCard } from '../api'
@@ -18,6 +20,8 @@ import {
 } from './ui/card'
 import { Separator } from './ui/separator'
 import { Tooltip } from './ui/tooltip'
+
+const MSG_SPRING = { type: 'spring' as const, stiffness: 420, damping: 32, mass: 0.8 }
 
 export type StreamState = {
   text: string
@@ -48,13 +52,40 @@ function ToolCards({
   tools: ToolCard[]
   runningIds?: Set<string>
 }) {
+  const [parent] = useAutoAnimate({ duration: 180, easing: 'ease-out' })
   if (!tools?.length) return null
   return (
-    <div className="tool-cards">
+    <div className="tool-cards" ref={parent}>
       {tools.map((t) => (
         <ToolCardView key={t.id} tool={t} running={runningIds?.has(t.id)} />
       ))}
     </div>
+  )
+}
+
+function MessageEntrance({
+  children,
+  className,
+  animate = true,
+}: {
+  children: ReactNode
+  className?: string
+  /** When false, skip entrance (history load / session switch). */
+  animate?: boolean
+}) {
+  const reduceMotion = useReducedMotion()
+  if (reduceMotion || !animate) {
+    return <div className={className}>{children}</div>
+  }
+  return (
+    <motion.div
+      className={className}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={MSG_SPRING}
+    >
+      {children}
+    </motion.div>
   )
 }
 
@@ -236,6 +267,52 @@ export function MessageList({
   onRetry,
   onOpenArtifact,
 }: Props) {
+  // Only animate truly new bubbles (send / stream), not full history loads
+  // or post-stream bulk replace (local ids → server ids).
+  // Compute during render so Motion mounts with the correct `initial`.
+  const knownIdsRef = useRef<Set<string>>(new Set())
+  const seededRef = useRef(false)
+  const entranceCacheRef = useRef<Map<string, boolean>>(new Map())
+
+  const liveIds = useMemo(() => {
+    const ids = new Set(messages.map((m) => m.id))
+    if (streaming?.active) ids.add('streaming')
+    return ids
+  }, [messages, streaming?.active])
+
+  if (liveIds.size === 0) {
+    knownIdsRef.current.clear()
+    entranceCacheRef.current.clear()
+    seededRef.current = false
+  } else {
+    for (const id of [...knownIdsRef.current]) {
+      if (!liveIds.has(id)) {
+        knownIdsRef.current.delete(id)
+        entranceCacheRef.current.delete(id)
+      }
+    }
+    if (!seededRef.current) {
+      for (const id of liveIds) {
+        knownIdsRef.current.add(id)
+        entranceCacheRef.current.set(id, false)
+      }
+      seededRef.current = true
+    } else {
+      const fresh: string[] = []
+      for (const id of liveIds) {
+        if (!knownIdsRef.current.has(id)) fresh.push(id)
+      }
+      // 1–2 new ids ≈ user send / stream start; bulk = history sync → no bounce.
+      const animateFresh = fresh.length > 0 && fresh.length <= 2
+      for (const id of fresh) {
+        knownIdsRef.current.add(id)
+        entranceCacheRef.current.set(id, animateFresh || id === 'streaming')
+      }
+    }
+  }
+
+  const shouldAnimate = (id: string) => entranceCacheRef.current.get(id) === true
+
   const runningToolIds = new Set<string>()
   if (streaming?.active) {
     for (const t of streaming.tools) {
@@ -284,7 +361,11 @@ export function MessageList({
       )}
 
       {messages.map((m, index) => (
-        <div key={m.id} className="msg-stack">
+        <MessageEntrance
+          key={m.id}
+          className="msg-stack"
+          animate={shouldAnimate(m.id)}
+        >
           {index > 0 ? <Separator className="msg-separator my-1 opacity-60" /> : null}
           <Bubble
             id={m.id}
@@ -298,11 +379,15 @@ export function MessageList({
             }
             onOpenArtifact={onOpenArtifact}
           />
-        </div>
+        </MessageEntrance>
       ))}
 
       {streaming?.active && (
-        <div className="msg-stack">
+        <MessageEntrance
+          key="streaming"
+          className="msg-stack"
+          animate={shouldAnimate('streaming')}
+        >
           {messages.length > 0 ? (
             <Separator className="msg-separator my-1 opacity-60" />
           ) : null}
@@ -314,7 +399,7 @@ export function MessageList({
             streaming
             runningToolIds={runningToolIds}
           />
-        </div>
+        </MessageEntrance>
       )}
     </div>
   )

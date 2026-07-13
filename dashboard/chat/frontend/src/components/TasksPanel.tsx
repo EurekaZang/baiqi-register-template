@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 import {
   CheckCircle2,
   ChevronDown,
@@ -63,6 +64,7 @@ function statusMeta(status?: string): {
 
 export function TasksPanel({ tasks, open, onOpenChange, className }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const [listParent] = useAutoAnimate({ duration: 180, easing: 'ease-out' })
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const visible = useMemo(
@@ -233,7 +235,7 @@ export function TasksPanel({ tasks, open, onOpenChange, className }: Props) {
           <Separator />
           <CardContent className="p-0">
             <ScrollArea className="max-h-56">
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-slate-100" ref={listParent}>
                 {visible.map((task) => {
                   const meta = statusMeta(task.status)
                   const isOpen = expandedId === String(task.id)

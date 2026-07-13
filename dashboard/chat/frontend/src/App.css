@@ -750,6 +750,23 @@ textarea {
   flex-direction: column;
   min-height: 0;
   box-shadow: var(--shadow);
+  will-change: width, transform, opacity;
+}
+
+.artifacts-panel-inner {
+  width: var(--artifacts-w);
+  min-width: var(--artifacts-w);
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .artifacts-panel {
+    will-change: auto;
+  }
 }
 
 .artifacts-head {
@@ -1031,6 +1048,17 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 1.1rem;
+}
+
+.msg-stack {
+  /* Motion entrance targets this wrapper */
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-stack {
+    will-change: auto;
+  }
 }
 
 .empty-state {
@@ -1593,7 +1621,9 @@ button.active-toggle {
     display: none;
   }
 
-  .artifacts-panel {
+  .artifacts-panel,
+  .artifacts-panel-inner {
     width: min(100vw, 360px);
+    min-width: min(100vw, 360px);
   }
 }

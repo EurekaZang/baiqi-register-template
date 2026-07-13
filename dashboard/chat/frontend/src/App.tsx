@@ -4,6 +4,7 @@ import {
   getToken,
   listSessions,
   deleteSession,
+  patchSession,
   type SessionSummary,
 } from './api'
 import { ChatView } from './components/ChatView'
@@ -74,6 +75,21 @@ export default function App() {
     }
   }
 
+  async function handleRename(id: string, title: string) {
+    try {
+      const updated = await patchSession(id, { title })
+      setSessions((prev) => {
+        const idx = prev.findIndex((s) => s.id === id)
+        if (idx < 0) return prev
+        const next = [...prev]
+        next[idx] = { ...next[idx], ...updated }
+        return next
+      })
+    } catch {
+      /* ignore rename failure in UI */
+    }
+  }
+
   function handleSessionCreated(session: SessionSummary) {
     setActiveId(session.id)
     setDraftMode(false)
@@ -112,6 +128,7 @@ export default function App() {
         onSelect={handleSelect}
         onNew={handleNew}
         onDelete={(id) => void handleDelete(id)}
+        onRename={(id, title) => void handleRename(id, title)}
         onLogout={handleLogout}
       />
       <ChatView

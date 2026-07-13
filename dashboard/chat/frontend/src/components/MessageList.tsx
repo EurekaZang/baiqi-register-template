@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Message, ToolCard } from '../api'
+import { extractArtifacts, extractReasoning, type Artifact } from '../lib/content'
+import { ReasoningBlock } from './ReasoningBlock'
 import { ToolCardView } from './ToolCard'
 
 export type StreamState = {
@@ -15,6 +17,8 @@ type Props = {
   streaming: StreamState
   onSuggestion?: (text: string) => void
   suggestions?: string[]
+  onRetry?: (userText: string) => void
+  onOpenArtifact?: (artifact: Artifact) => void
 }
 
 const DEFAULT_SUGGESTIONS = [
@@ -35,11 +39,7 @@ function ToolCards({
   return (
     <div className="tool-cards">
       {tools.map((t) => (
-        <ToolCardView
-          key={t.id}
-          tool={t}
-          running={runningIds?.has(t.id)}
-        />
+        <ToolCardView key={t.id} tool={t} running={runningIds?.has(t.id)} />
       ))}
     </div>
   )
@@ -66,42 +66,83 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-function MessageActions({ content }: { content: string }) {
+function MessageActions({
+  content,
+  onRetry,
+  artifacts,
+  onOpenArtifact,
+}: {
+  content: string
+  onRetry?: () => void
+  artifacts?: Artifact[]
+  onOpenArtifact?: (a: Artifact) => void
+}) {
   const [copied, setCopied] = useState(false)
-  if (!content.trim()) return null
+  if (!content.trim() && !artifacts?.length && !onRetry) return null
   return (
     <div className="msg-actions">
-      <button
-        type="button"
-        className="btn ghost msg-action-btn"
-        onClick={() => {
-          void copyText(content).then((ok) => {
-            if (!ok) return
-            setCopied(true)
-            window.setTimeout(() => setCopied(false), 1200)
-          })
-        }}
-      >
-        {copied ? 'Copied' : 'Copy'}
-      </button>
+      {content.trim() ? (
+        <button
+          type="button"
+          className="btn ghost msg-action-btn"
+          onClick={() => {
+            void copyText(content).then((ok) => {
+              if (!ok) return
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 1200)
+            })
+          }}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      ) : null}
+      {onRetry ? (
+        <button type="button" className="btn ghost msg-action-btn" onClick={onRetry}>
+          Retry
+        </button>
+      ) : null}
+      {artifacts && artifacts.length > 0 && onOpenArtifact ? (
+        <button
+          type="button"
+          className="btn ghost msg-action-btn"
+          onClick={() => onOpenArtifact(artifacts[artifacts.length - 1])}
+        >
+          Artifacts ({artifacts.length})
+        </button>
+      ) : null}
     </div>
   )
 }
 
 function Bubble({
+  id,
   role,
   content,
   tools,
   streaming,
   runningToolIds,
+  onRetry,
+  onOpenArtifact,
 }: {
+  id: string
   role: string
   content: string
   tools?: ToolCard[]
   streaming?: boolean
   runningToolIds?: Set<string>
+  onRetry?: () => void
+  onOpenArtifact?: (a: Artifact) => void
 }) {
   const isUser = role === 'user'
+  const { reasoning, rest } = useMemo(
+    () => (isUser ? { reasoning: [] as string[], rest: content } : extractReasoning(content)),
+    [content, isUser],
+  )
+  const artifacts = useMemo(
+    () => (isUser ? [] : extractArtifacts(content, id)),
+    [content, id, isUser],
+  )
+
   return (
     <div className={`msg ${isUser ? 'user' : 'assistant'}`}>
       <div className="msg-meta">
@@ -118,17 +159,27 @@ function Bubble({
           <div className="user-text">{content}</div>
         ) : (
           <>
+            {reasoning.map((r, idx) => (
+              <ReasoningBlock key={`${id}-r${idx}`} text={r} />
+            ))}
             <ToolCards tools={tools || []} runningIds={runningToolIds} />
             <div className="md">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {content || (streaming ? '' : '')}
+                {rest || (streaming ? '' : '')}
               </ReactMarkdown>
               {streaming && <span className="cursor" aria-hidden />}
             </div>
           </>
         )}
       </div>
-      {!streaming ? <MessageActions content={content} /> : null}
+      {!streaming ? (
+        <MessageActions
+          content={isUser ? content : rest}
+          onRetry={isUser ? onRetry : undefined}
+          artifacts={artifacts}
+          onOpenArtifact={onOpenArtifact}
+        />
+      ) : null}
     </div>
   )
 }
@@ -138,6 +189,8 @@ export function MessageList({
   streaming,
   onSuggestion,
   suggestions = DEFAULT_SUGGESTIONS,
+  onRetry,
+  onOpenArtifact,
 }: Props) {
   const runningToolIds = new Set<string>()
   if (streaming?.active) {
@@ -177,13 +230,21 @@ export function MessageList({
       {messages.map((m) => (
         <Bubble
           key={m.id}
+          id={m.id}
           role={m.role}
           content={m.content}
           tools={m.tools}
+          onRetry={
+            m.role === 'user' && onRetry
+              ? () => onRetry(m.content)
+              : undefined
+          }
+          onOpenArtifact={onOpenArtifact}
         />
       ))}
       {streaming?.active && (
         <Bubble
+          id="streaming"
           role="assistant"
           content={streaming.text}
           tools={streaming.tools}

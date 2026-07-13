@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ApiError,
   createSession,
@@ -10,6 +10,8 @@ import {
   type SessionSummary,
   type ToolCard,
 } from '../api'
+import { extractArtifacts, type Artifact } from '../lib/content'
+import { ArtifactsPanel } from './ArtifactsPanel'
 import { Composer } from './Composer'
 import { CwdPicker } from './CwdPicker'
 import { MessageList, type StreamState } from './MessageList'
@@ -38,6 +40,8 @@ export function ChatView({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [seedText, setSeedText] = useState<string | undefined>(undefined)
+  const [artifactsOpen, setArtifactsOpen] = useState(false)
+  const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const loadedIdRef = useRef<string | null>(null)
@@ -45,16 +49,18 @@ export function ChatView({
 
   const isStreaming = !!streaming?.active
 
-  // Load session when id changes (skip if we already own this session, e.g. just created)
   useEffect(() => {
     if (draftMode || !sessionId) {
       loadedIdRef.current = null
+      activeIdRef.current = null
       setSession(null)
       setMessages([])
       setCwd('')
       setModel(defaultModel)
       setStreaming(null)
       setError(null)
+      setArtifactsOpen(false)
+      setActiveArtifactId(null)
       return
     }
     if (loadedIdRef.current === sessionId) {
@@ -67,6 +73,7 @@ export function ChatView({
       .then((s) => {
         if (cancelled) return
         loadedIdRef.current = s.id
+        activeIdRef.current = s.id
         setSession(s)
         setMessages(s.messages || [])
         setCwd(s.cwd || '')
@@ -86,6 +93,18 @@ export function ChatView({
   useEffect(() => {
     const el = listRef.current
     if (el) el.scrollTop = el.scrollHeight
+  }, [messages, streaming])
+
+  const artifacts = useMemo(() => {
+    const all: Artifact[] = []
+    for (const m of messages) {
+      if (m.role !== 'assistant') continue
+      all.push(...extractArtifacts(m.content || '', m.id))
+    }
+    if (streaming?.text) {
+      all.push(...extractArtifacts(streaming.text, 'streaming'))
+    }
+    return all
   }, [messages, streaming])
 
   const applyModelCwd = useCallback(
@@ -137,7 +156,6 @@ export function ChatView({
 
       const ac = new AbortController()
       abortRef.current = ac
-
       const toolsMap = new Map<string, ToolCard>()
 
       await streamMessage(
@@ -187,22 +205,17 @@ export function ChatView({
             }))
           } else if (event === 'error') {
             setError(String(data.message ?? 'Agent error'))
-          } else if (event === 'done') {
-            // finalize below
           }
         },
         ac.signal,
       )
 
-      // Reload authoritative session after stream
       const fresh = await getSession(activeId!)
       setSession(fresh)
       setMessages(fresh.messages || [])
       onSessionUpdated(fresh)
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        // user stopped
-      } else {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
         const msg =
           err instanceof ApiError
             ? err.message
@@ -248,75 +261,125 @@ export function ChatView({
     setSeedText(text)
   }
 
+  function handleOpenArtifact(a: Artifact) {
+    setActiveArtifactId(a.id)
+    setArtifactsOpen(true)
+  }
+
   const headerCwd = draftMode ? cwd : session?.cwd || cwd
   const headerModel = draftMode ? model : session?.model || model
   const running = isStreaming || session?.status === 'running'
+  const title =
+    session?.title && session.title !== 'New chat'
+      ? session.title
+      : draftMode
+        ? 'New chat'
+        : session?.title || 'Chat'
 
   return (
-    <section className="chat-view">
-      <header className="chat-header">
-        <div className="header-left">
-          <CwdPicker
-            value={headerCwd}
-            onChange={(v) => {
-              setCwd(v)
-              if (!draftMode && sessionId) void applyModelCwd({ cwd: v })
-            }}
-            disabled={running}
-          />
-          <ModelSelect
-            value={headerModel}
-            onChange={(v) => {
-              setModel(v)
-              if (!draftMode && sessionId) void applyModelCwd({ model: v })
-            }}
-            disabled={running}
-          />
-        </div>
-        <div className="header-right">
-          <span className="badge full-auto" title="permission_mode=bypassPermissions">
-            Full auto
-          </span>
-        </div>
-      </header>
+    <section className={`chat-view ${artifactsOpen ? 'with-artifacts' : ''}`}>
+      <div className="chat-main-col">
+        <header className="chat-header">
+          <div className="header-identity">
+            <div className="header-title-row">
+              <h1 className="chat-title">{title}</h1>
+              <span
+                className="badge full-auto"
+                title="permission_mode=bypassPermissions"
+              >
+                Full auto
+              </span>
+              {running ? (
+                <span className="badge running">
+                  <span className="pulse-dot" />
+                  Running
+                </span>
+              ) : null}
+            </div>
+            <div className="header-controls">
+              <CwdPicker
+                value={headerCwd}
+                onChange={(v) => {
+                  setCwd(v)
+                  if (!draftMode && sessionId) void applyModelCwd({ cwd: v })
+                }}
+                disabled={running}
+              />
+              <ModelSelect
+                value={headerModel}
+                onChange={(v) => {
+                  setModel(v)
+                  if (!draftMode && sessionId) void applyModelCwd({ model: v })
+                }}
+                disabled={running}
+                compact
+              />
+            </div>
+          </div>
+          <div className="header-right">
+            <button
+              type="button"
+              className={`btn ghost ${artifactsOpen ? 'active-toggle' : ''}`}
+              onClick={() => setArtifactsOpen((v) => !v)}
+              title="Toggle artifacts panel"
+            >
+              Artifacts{artifacts.length ? ` (${artifacts.length})` : ''}
+            </button>
+          </div>
+        </header>
 
-      {error && <div className="error-banner">{error}</div>}
+        {error && <div className="error-banner">{error}</div>}
 
-      <div className="chat-scroll" ref={listRef}>
-        {loading ? (
-          <div className="muted pad-sm">Loading…</div>
-        ) : (
-          <MessageList
-            messages={messages}
-            streaming={streaming}
-            onSuggestion={
-              isStreaming || loading ? undefined : handleSuggestion
-            }
-          />
-        )}
+        <div className="chat-scroll" ref={listRef}>
+          {loading ? (
+            <div className="muted pad-sm">Loading…</div>
+          ) : (
+            <MessageList
+              messages={messages}
+              streaming={streaming}
+              onSuggestion={
+                isStreaming || loading ? undefined : handleSuggestion
+              }
+              onRetry={
+                isStreaming || loading
+                  ? undefined
+                  : (userText) => void handleSend(userText)
+              }
+              onOpenArtifact={handleOpenArtifact}
+            />
+          )}
+        </div>
+
+        <Composer
+          disabled={loading || (draftMode && !cwd.trim())}
+          streaming={isStreaming}
+          onSend={handleSend}
+          onStop={() => void handleStop()}
+          seedText={seedText}
+          onSeedConsumed={() => setSeedText(undefined)}
+          hint={
+            draftMode && !cwd.trim()
+              ? 'Set an absolute cwd above before starting.'
+              : running
+                ? 'Agent is running in Full auto mode.'
+                : undefined
+          }
+          placeholder={
+            draftMode
+              ? cwd.trim()
+                ? 'Describe a coding task…'
+                : 'Set cwd above, then message…'
+              : 'Message the agent…'
+          }
+        />
       </div>
 
-      <Composer
-        disabled={loading || (draftMode && !cwd.trim())}
-        streaming={isStreaming}
-        onSend={handleSend}
-        onStop={() => void handleStop()}
-        seedText={seedText}
-        onSeedConsumed={() => setSeedText(undefined)}
-        hint={
-          draftMode && !cwd.trim()
-            ? 'Set an absolute cwd above before starting.'
-            : running
-              ? 'Agent is running in Full auto mode.'
-              : undefined
-        }
-        placeholder={
-          draftMode
-            ? cwd.trim()
-              ? 'Describe a coding task…'
-              : 'Set cwd above, then message…'
-            : 'Message the agent…'
-        }
+      <ArtifactsPanel
+        artifacts={artifacts}
+        open={artifactsOpen}
+        onClose={() => setArtifactsOpen(false)}
+        activeId={activeArtifactId}
+        onSelect={setActiveArtifactId}
       />
     </section>
   )

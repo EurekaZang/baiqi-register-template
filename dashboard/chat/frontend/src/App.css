@@ -1105,13 +1105,102 @@ textarea {
 }
 
 .suggestion-chip {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   box-shadow: var(--shadow);
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.suggestion-chip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    transparent 35%,
+    rgba(14, 165, 233, 0.55) 50%,
+    transparent 65%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: chip-border-beam 3.2s linear infinite;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.suggestion-chip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 65%
+  );
+  background-size: 220% 100%;
+  animation: chip-shimmer 2.8s ease-in-out infinite;
+  pointer-events: none;
+  opacity: 0.35;
+  z-index: 0;
+}
+
+.suggestion-chip > * {
+  position: relative;
+  z-index: 1;
 }
 
 .suggestion-chip:hover {
-  border-color: #bae6fd;
+  border-color: #7dd3fc;
   background: #f0f9ff;
   color: #0369a1;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.12);
+  transform: translateY(-1px);
+}
+
+.suggestion-chip:hover::before {
+  animation-duration: 1.6s;
+  opacity: 1;
+}
+
+.suggestion-chip:active {
+  transform: translateY(0);
+}
+
+@keyframes chip-border-beam {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes chip-shimmer {
+  0%,
+  40% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .full-auto-badge .status-dot-inline,
@@ -1120,10 +1209,105 @@ textarea {
   height: 7px;
   border-radius: 50%;
   display: inline-block;
+  flex-shrink: 0;
 }
 
 .full-auto-badge .status-dot-inline.ok {
   background: var(--ok);
+}
+
+/* 4. Running badge — softer dual-layer breathing pulse */
+.running-badge {
+  gap: 0.4rem;
+  padding-inline: 0.55rem;
+  background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-color: #bae6fd;
+  color: #0369a1;
+  box-shadow: 0 0 0 0 rgba(14, 165, 233, 0);
+  animation: running-badge-breathe 2.4s ease-in-out infinite;
+}
+
+.running-badge .pulse-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  background: #0ea5e9;
+  box-shadow: none;
+  animation: running-dot-core 2.4s ease-in-out infinite;
+}
+
+.running-badge .pulse-dot::before,
+.running-badge .pulse-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(14, 165, 233, 0.35);
+  animation: running-dot-ring 2.4s ease-out infinite;
+}
+
+.running-badge .pulse-dot::after {
+  animation-delay: 1.2s;
+  background: rgba(14, 165, 233, 0.22);
+}
+
+@keyframes running-badge-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(14, 165, 233, 0);
+    border-color: #bae6fd;
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.08);
+    border-color: #7dd3fc;
+  }
+}
+
+@keyframes running-dot-core {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes running-dot-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .suggestion-chip::before,
+  .suggestion-chip::after,
+  .running-badge,
+  .running-badge .pulse-dot,
+  .running-badge .pulse-dot::before,
+  .running-badge .pulse-dot::after {
+    animation: none !important;
+  }
+
+  .suggestion-chip::before,
+  .suggestion-chip::after {
+    opacity: 0;
+  }
+
+  .suggestion-chip:hover {
+    transform: none;
+  }
 }
 
 .btn.active-toggle,
@@ -1261,6 +1445,12 @@ button.active-toggle {
   background: var(--accent);
   box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.45);
   animation: pulse 1.4s ease-out infinite;
+}
+
+/* Streaming badge in message header reuses a quieter pulse */
+.msg-stream-badge .pulse-dot {
+  animation: running-dot-core 2s ease-in-out infinite;
+  box-shadow: none;
 }
 
 @keyframes pulse {
@@ -1539,6 +1729,27 @@ button.active-toggle {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease,
+    background-color 0.18s ease;
+  transform-origin: center bottom;
+}
+
+/* 6. Composer focus — soft sky ring + slight scale */
+.composer-main:focus-within {
+  border-color: #7dd3fc;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 3px rgba(14, 165, 233, 0.12),
+    0 8px 22px rgba(15, 23, 42, 0.06);
+  transform: scale(1.008);
+}
+
+.composer-main.is-streaming {
+  border-color: #bae6fd;
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.08);
 }
 
 .composer textarea {
@@ -1557,6 +1768,14 @@ button.active-toggle {
 .composer textarea:focus {
   border: 0;
   box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-main,
+  .composer-main:focus-within {
+    transition: none;
+    transform: none;
+  }
 }
 
 .composer-toolbar {

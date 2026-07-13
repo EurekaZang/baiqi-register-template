@@ -77,7 +77,9 @@ export function Composer({
     <div className="composer-shell">
       {hint ? <div className="composer-hint muted">{hint}</div> : null}
       <form className="composer" onSubmit={onSubmit}>
-        <div className="composer-main">
+        <div
+          className={`composer-main${streaming ? ' is-streaming' : ''}`}
+        >
           <Textarea
             ref={taRef}
             value={text}

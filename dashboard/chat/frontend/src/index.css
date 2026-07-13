@@ -1,0 +1,10 @@
+/* Global reset; theme lives in App.css */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}

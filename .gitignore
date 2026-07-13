@@ -11,7 +11,8 @@ config.local.json
 
 dashboard/chat/backend/.venv/
 dashboard/chat/frontend/node_modules/
-dashboard/chat/frontend/dist/
+# dist committed for offline serve (rebuild via npm run build)
+# dashboard/chat/frontend/dist/
 dashboard/chat/data/sessions/*
 !dashboard/chat/data/sessions/.gitkeep
 dashboard/chat/.env

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
+import { Button } from './ui/button'
 
 type Props = {
   text: string
@@ -10,23 +12,24 @@ export function ReasoningBlock({ text, defaultOpen = false }: Props) {
   if (!text.trim()) return null
   return (
     <div className={`reasoning-block ${open ? 'open' : ''}`}>
-      <button
+      <Button
         type="button"
-        className="reasoning-head"
+        variant="ghost"
+        className="reasoning-head h-auto w-full justify-start rounded-none px-3 py-2 hover:bg-slate-50"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
-        <span className="reasoning-icon" aria-hidden>
-          ◇
-        </span>
+        <Sparkles className="h-3.5 w-3.5 text-violet-500" />
         <span className="reasoning-title">Reasoning</span>
         <span className="reasoning-meta muted">
           {open ? 'Hide' : 'Show'} · {text.split(/\s+/).filter(Boolean).length} words
         </span>
-        <span className="tool-chevron" aria-hidden>
-          {open ? '▾' : '▸'}
-        </span>
-      </button>
+        {open ? (
+          <ChevronDown className="ml-auto h-3.5 w-3.5 text-slate-400" />
+        ) : (
+          <ChevronRight className="ml-auto h-3.5 w-3.5 text-slate-400" />
+        )}
+      </Button>
       {open ? (
         <div className="reasoning-body">
           <pre className="reasoning-pre">{text}</pre>

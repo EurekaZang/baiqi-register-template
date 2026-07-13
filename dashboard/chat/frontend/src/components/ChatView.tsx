@@ -10,12 +10,15 @@ import {
   type SessionSummary,
   type ToolCard,
 } from '../api'
+import { Boxes } from 'lucide-react'
 import { extractArtifacts, type Artifact } from '../lib/content'
 import { ArtifactsPanel } from './ArtifactsPanel'
 import { Composer } from './Composer'
 import { CwdPicker } from './CwdPicker'
 import { MessageList, type StreamState } from './MessageList'
 import { ModelSelect } from './ModelSelect'
+import { Badge } from './ui/badge'
+import { Button } from './ui/button'
 
 type Props = {
   sessionId: string | null
@@ -283,17 +286,19 @@ export function ChatView({
           <div className="header-identity">
             <div className="header-title-row">
               <h1 className="chat-title">{title}</h1>
-              <span
-                className="badge full-auto"
+              <Badge
+                variant="success"
                 title="permission_mode=bypassPermissions"
+                className="full-auto-badge"
               >
+                <span className="status-dot-inline ok" />
                 Full auto
-              </span>
+              </Badge>
               {running ? (
-                <span className="badge running">
+                <Badge variant="accent" className="running-badge">
                   <span className="pulse-dot" />
                   Running
-                </span>
+                </Badge>
               ) : null}
             </div>
             <div className="header-controls">
@@ -317,14 +322,16 @@ export function ChatView({
             </div>
           </div>
           <div className="header-right">
-            <button
+            <Button
               type="button"
-              className={`btn ghost ${artifactsOpen ? 'active-toggle' : ''}`}
+              variant={artifactsOpen ? 'secondary' : 'ghost'}
               onClick={() => setArtifactsOpen((v) => !v)}
               title="Toggle artifacts panel"
+              className={artifactsOpen ? 'active-toggle' : undefined}
             >
+              <Boxes className="h-4 w-4" />
               Artifacts{artifacts.length ? ` (${artifacts.length})` : ''}
-            </button>
+            </Button>
           </div>
         </header>
 

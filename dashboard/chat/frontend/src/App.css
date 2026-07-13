@@ -642,21 +642,8 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  border: 0;
-  background: transparent;
-  padding: 0.5rem 0.7rem;
-  cursor: pointer;
   text-align: left;
   color: inherit;
-}
-
-.reasoning-head:hover {
-  background: rgba(15, 23, 42, 0.03);
-}
-
-.reasoning-icon {
-  color: #8b5cf6;
-  font-size: 12px;
 }
 
 .reasoning-title {
@@ -731,17 +718,8 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  border: 1px solid transparent;
-  background: transparent;
-  border-radius: 8px;
-  padding: 0.45rem 0.55rem;
-  cursor: pointer;
   text-align: left;
   color: inherit;
-}
-
-.artifact-item:hover {
-  background: #f8fafc;
 }
 
 .artifact-item.active {
@@ -872,21 +850,32 @@ textarea {
 }
 
 .suggestion-chip {
-  border: 1px solid var(--border);
-  background: #f8fafc;
-  color: var(--text);
-  border-radius: 999px;
-  padding: 0.4rem 0.75rem;
-  font-size: 12px;
-  cursor: pointer;
   box-shadow: var(--shadow);
-  transition: border-color 0.15s, background 0.15s;
 }
 
 .suggestion-chip:hover {
   border-color: #bae6fd;
   background: #f0f9ff;
   color: #0369a1;
+}
+
+.full-auto-badge .status-dot-inline,
+.running-badge .pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.full-auto-badge .status-dot-inline.ok {
+  background: var(--ok);
+}
+
+.btn.active-toggle,
+button.active-toggle {
+  border-color: #bae6fd;
+  background: var(--accent-soft);
+  color: var(--accent-hover);
 }
 
 .msg {
@@ -1080,16 +1069,8 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  border: 0;
-  background: transparent;
-  padding: 0.55rem 0.75rem;
-  cursor: pointer;
   text-align: left;
   color: inherit;
-}
-
-.tool-card-head:hover {
-  background: rgba(15, 23, 42, 0.03);
 }
 
 .tool-status-dot {

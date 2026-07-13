@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { ApiError, login } from '../api'
+import { Button } from './ui/button'
+import { Input } from './ui/input'
 
 type Props = {
   onSuccess: () => void
@@ -39,7 +41,7 @@ export function Login({ onSuccess }: Props) {
         <p className="muted">Enter the shared chat token to continue.</p>
         <label className="field">
           <span>Token</span>
-          <input
+          <Input
             type="password"
             autoComplete="current-password"
             value={token}
@@ -50,9 +52,9 @@ export function Login({ onSuccess }: Props) {
           />
         </label>
         {error && <div className="error-banner">{error}</div>}
-        <button type="submit" className="btn primary" disabled={busy || !token.trim()}>
+        <Button type="submit" disabled={busy || !token.trim()} className="w-full">
           {busy ? 'Signing in…' : 'Sign in'}
-        </button>
+        </Button>
       </form>
     </div>
   )

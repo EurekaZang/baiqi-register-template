@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { recentCwds } from '../api'
+import { Input } from './ui/input'
+import { Select } from './ui/select'
 
 type Props = {
   value: string
@@ -31,7 +33,7 @@ export function CwdPicker({ value, onChange, disabled, loadRecent = true }: Prop
     <div className="cwd-picker">
       <label className="field inline">
         <span>cwd</span>
-        <input
+        <Input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -39,6 +41,7 @@ export function CwdPicker({ value, onChange, disabled, loadRecent = true }: Prop
           disabled={disabled}
           list="recent-cwds"
           spellCheck={false}
+          className="font-mono text-xs"
         />
       </label>
       <datalist id="recent-cwds">
@@ -47,8 +50,8 @@ export function CwdPicker({ value, onChange, disabled, loadRecent = true }: Prop
         ))}
       </datalist>
       {recent.length > 0 && (
-        <select
-          className="cwd-recent"
+        <Select
+          className="cwd-recent h-9 max-w-[150px] font-mono text-xs"
           value=""
           disabled={disabled}
           onChange={(e) => {
@@ -62,7 +65,7 @@ export function CwdPicker({ value, onChange, disabled, loadRecent = true }: Prop
               {c}
             </option>
           ))}
-        </select>
+        </Select>
       )}
     </div>
   )

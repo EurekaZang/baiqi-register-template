@@ -228,14 +228,16 @@ export function MessageList({
             {onSuggestion ? (
               <div className="suggestion-row">
                 {suggestions.map((s) => (
-                  <button
+                  <Button
                     key={s}
                     type="button"
-                    className="suggestion-chip"
+                    variant="outline"
+                    size="sm"
+                    className="suggestion-chip h-auto rounded-full px-3 py-1.5 text-xs font-normal"
                     onClick={() => onSuggestion(s)}
                   >
                     {s}
-                  </button>
+                  </Button>
                 ))}
               </div>
             ) : null}

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listModels, type ModelItem } from '../api'
+import { Badge } from './ui/badge'
+import { Select } from './ui/select'
 
 type Props = {
   value: string
@@ -58,10 +60,11 @@ export function ModelSelect({ value, onChange, disabled, compact }: Props) {
     <label className={`field model-select ${compact ? 'compact' : 'inline'}`}>
       {!compact ? <span>Model</span> : <span className="model-label">Model</span>}
       <div className="model-control">
-        <select
+        <Select
           value={value || FALLBACK_DEFAULT}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
+          className="min-w-[150px] font-mono text-xs"
           title={
             error
               ? `Models: ${error}`
@@ -75,8 +78,8 @@ export function ModelSelect({ value, onChange, disabled, compact }: Props) {
               {m.display_name || m.id}
             </option>
           ))}
-        </select>
-        {stale ? <span className="badge warn">stale</span> : null}
+        </Select>
+        {stale ? <Badge variant="warn">stale</Badge> : null}
       </div>
     </label>
   )

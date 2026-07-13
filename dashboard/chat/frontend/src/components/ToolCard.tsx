@@ -1,5 +1,8 @@
 import { useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { ToolCard as ToolCardType } from '../api'
+import { Button } from './ui/button'
+import { Badge } from './ui/badge'
 
 type Props = {
   tool: ToolCardType
@@ -20,21 +23,29 @@ export function ToolCardView({ tool, running, defaultOpen = false }: Props) {
 
   return (
     <div className={`tool-card status-${status}`} data-open={open ? '1' : '0'}>
-      <button
+      <Button
         type="button"
-        className="tool-card-head"
+        variant="ghost"
+        className="tool-card-head h-auto w-full justify-start rounded-none px-3 py-2.5 hover:bg-slate-50"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
         <span className={`tool-status-dot status-${status}`} aria-hidden />
         <span className="tool-name">{tool.name}</span>
-        <span className="tool-status-label">
+        <Badge
+          variant={
+            status === 'error' ? 'danger' : status === 'running' ? 'accent' : 'success'
+          }
+          className="ml-auto"
+        >
           {status === 'running' ? 'Running' : status === 'error' ? 'Failed' : 'Done'}
-        </span>
-        <span className="tool-chevron" aria-hidden>
-          {open ? '▾' : '▸'}
-        </span>
-      </button>
+        </Badge>
+        {open ? (
+          <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+        )}
+      </Button>
       {open && (
         <div className="tool-card-body">
           {tool.input_summary ? (

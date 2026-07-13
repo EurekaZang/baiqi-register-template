@@ -63,10 +63,11 @@ export function ArtifactsPanel({
         <>
           <div className="artifacts-list">
             {artifacts.map((a) => (
-              <button
+              <Button
                 key={a.id}
                 type="button"
-                className={`artifact-item ${active?.id === a.id ? 'active' : ''}`}
+                variant={active?.id === a.id ? 'secondary' : 'ghost'}
+                className={`artifact-item h-auto w-full justify-start px-2.5 py-2 ${active?.id === a.id ? 'active' : ''}`}
                 onClick={() => {
                   onSelect?.(a.id)
                   setMode(a.previewable ? mode : 'code')
@@ -79,7 +80,7 @@ export function ArtifactsPanel({
                     <Eye className="h-3.5 w-3.5" />
                   </span>
                 ) : null}
-              </button>
+              </Button>
             ))}
           </div>
           {active ? (

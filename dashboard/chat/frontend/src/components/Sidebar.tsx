@@ -4,6 +4,8 @@ import type { SessionSummary } from '../api'
 import { groupSessionsByDay } from '../lib/content'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
+import { Separator } from './ui/separator'
+import { Tooltip } from './ui/tooltip'
 
 type Props = {
   sessions: SessionSummary[]
@@ -105,8 +107,11 @@ export function Sidebar({
             {sessions.length === 0 ? 'No sessions yet' : 'No matches'}
           </div>
         )}
-        {groups.map((g) => (
+        {groups.map((g, groupIndex) => (
           <div key={g.label} className="session-group">
+            {groupIndex > 0 ? (
+              <Separator className="session-group-sep mx-2 my-1 opacity-70" />
+            ) : null}
             <div className="session-group-label">{g.label}</div>
             {g.items.map((s) => (
               <div
@@ -145,43 +150,46 @@ export function Sidebar({
                   {s.cwd ? <span className="session-cwd">{shortCwd(s.cwd)}</span> : null}
                 </div>
                 <div className="session-actions">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title={s.pinned ? 'Unpin' : 'Pin'}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onTogglePin(s.id, !s.pinned)
-                    }}
-                  >
-                    {s.pinned ? (
-                      <PinOff className="h-3.5 w-3.5" />
-                    ) : (
-                      <Pin className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Rename"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      startRename(s)
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Delete"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDelete(s.id)
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <Tooltip content={s.pinned ? 'Unpin chat' : 'Pin chat'}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onTogglePin(s.id, !s.pinned)
+                      }}
+                    >
+                      {s.pinned ? (
+                        <PinOff className="h-3.5 w-3.5" />
+                      ) : (
+                        <Pin className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Rename">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        startRename(s)
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Delete">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDelete(s.id)
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </Tooltip>
                 </div>
               </div>
             ))}
@@ -196,10 +204,12 @@ export function Sidebar({
             ? ` · ${sessions.filter((s) => s.pinned).length} pinned`
             : ''}
         </div>
-        <Button variant="ghost" className="w-full justify-start" onClick={onLogout}>
-          <LogOut className="mr-2 h-4 w-4" />
-          Log out
-        </Button>
+        <Tooltip content="Clear local token and return to login">
+          <Button variant="ghost" className="w-full justify-start" onClick={onLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Log out
+          </Button>
+        </Tooltip>
       </div>
     </aside>
   )

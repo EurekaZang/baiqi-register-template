@@ -19,6 +19,7 @@ import { MessageList, type StreamState } from './MessageList'
 import { ModelSelect } from './ModelSelect'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
+import { Tooltip } from './ui/tooltip'
 
 type Props = {
   sessionId: string | null
@@ -286,19 +287,19 @@ export function ChatView({
           <div className="header-identity">
             <div className="header-title-row">
               <h1 className="chat-title">{title}</h1>
-              <Badge
-                variant="success"
-                title="permission_mode=bypassPermissions"
-                className="full-auto-badge"
-              >
-                <span className="status-dot-inline ok" />
-                Full auto
-              </Badge>
-              {running ? (
-                <Badge variant="accent" className="running-badge">
-                  <span className="pulse-dot" />
-                  Running
+              <Tooltip content="permission_mode=bypassPermissions">
+                <Badge variant="success" className="full-auto-badge">
+                  <span className="status-dot-inline ok" />
+                  Full auto
                 </Badge>
+              </Tooltip>
+              {running ? (
+                <Tooltip content="Agent turn in progress">
+                  <Badge variant="accent" className="running-badge">
+                    <span className="pulse-dot" />
+                    Running
+                  </Badge>
+                </Tooltip>
               ) : null}
             </div>
             <div className="header-controls">
@@ -322,16 +323,17 @@ export function ChatView({
             </div>
           </div>
           <div className="header-right">
-            <Button
-              type="button"
-              variant={artifactsOpen ? 'secondary' : 'ghost'}
-              onClick={() => setArtifactsOpen((v) => !v)}
-              title="Toggle artifacts panel"
-              className={artifactsOpen ? 'active-toggle' : undefined}
-            >
-              <Boxes className="h-4 w-4" />
-              Artifacts{artifacts.length ? ` (${artifacts.length})` : ''}
-            </Button>
+            <Tooltip content={artifactsOpen ? 'Hide artifacts panel' : 'Show artifacts panel'}>
+              <Button
+                type="button"
+                variant={artifactsOpen ? 'secondary' : 'ghost'}
+                onClick={() => setArtifactsOpen((v) => !v)}
+                className={artifactsOpen ? 'active-toggle' : undefined}
+              >
+                <Boxes className="h-4 w-4" />
+                Artifacts{artifacts.length ? ` (${artifacts.length})` : ''}
+              </Button>
+            </Tooltip>
           </div>
         </header>
 

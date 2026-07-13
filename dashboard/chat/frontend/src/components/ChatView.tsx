@@ -102,8 +102,22 @@ export function ChatView({
   const listRef = useRef<HTMLDivElement>(null)
   const loadedIdRef = useRef<string | null>(null)
   const activeIdRef = useRef<string | null>(null)
+  /** Session currently shown in the main pane (null = draft). */
+  const viewSessionIdRef = useRef<string | null>(null)
+  /** Session that owns the in-flight SSE stream (may differ from view). */
+  const streamSessionIdRef = useRef<string | null>(null)
+  /** Live stream snapshots so switching away/back can rehydrate partial UI. */
+  const streamBuffersRef = useRef<
+    Map<string, { text: string; tools: ToolCard[]; tasks?: AgentTask[] }>
+  >(new Map())
 
-  const isStreaming = !!streaming?.active
+  const isStreaming =
+    !!streaming?.active &&
+    !!sessionId &&
+    streamSessionIdRef.current === sessionId
+
+  // Keep view ownership ref in sync for async stream callbacks.
+  viewSessionIdRef.current = draftMode ? null : sessionId
 
   useEffect(() => {
     if (draftMode || !sessionId) {
@@ -112,23 +126,49 @@ export function ChatView({
       setSession(null)
       setMessages([])
       setTasks([])
-      setCwd('')
+      // Restore last cwd for new draft instead of wiping it.
+      try {
+        setCwd(localStorage.getItem('chat_last_cwd') || '')
+      } catch {
+        setCwd('')
+      }
       setModel(defaultModel)
+      // Detach UI from any background stream; do not abort the agent turn.
       setStreaming(null)
       setError(null)
+      setSeedText(undefined)
       setArtifactsOpen(false)
       setActiveArtifactId(null)
+      setTasksOpen(false)
+      setLoading(false)
       return
     }
+
+    // Same session already loaded: keep state (including live stream UI).
     if (loadedIdRef.current === sessionId) {
       return
     }
+
     let cancelled = false
+    const targetId = sessionId
     setLoading(true)
     setError(null)
-    getSession(sessionId)
+    // Immediately drop previous session's UI so stream callbacks cannot
+    // paint the wrong chat while the next session is loading.
+    setSession(null)
+    setMessages([])
+    setTasks([])
+    setArtifactsOpen(false)
+    setActiveArtifactId(null)
+    setTasksOpen(false)
+    // Only show streaming chrome when the open session owns the stream.
+    if (streamSessionIdRef.current !== targetId) {
+      setStreaming(null)
+    }
+
+    getSession(targetId)
       .then((s) => {
-        if (cancelled) return
+        if (cancelled || viewSessionIdRef.current !== targetId) return
         loadedIdRef.current = s.id
         activeIdRef.current = s.id
         setSession(s)
@@ -136,13 +176,28 @@ export function ChatView({
         setTasks(Array.isArray(s.tasks) ? s.tasks : [])
         setCwd(s.cwd || '')
         setModel(s.model || defaultModel)
-        // Keep tasks collapsed by default to avoid covering chat.
+        // Re-attach stream UI only if this session still owns the live stream.
+        if (streamSessionIdRef.current === s.id) {
+          const buf = streamBuffersRef.current.get(s.id)
+          setStreaming({
+            text: buf?.text || '',
+            tools: buf?.tools || [],
+            active: true,
+          })
+          if (buf?.tasks) setTasks(buf.tasks)
+        } else {
+          setStreaming(null)
+        }
       })
       .catch((err: Error) => {
-        if (!cancelled) setError(err.message)
+        if (!cancelled && viewSessionIdRef.current === targetId) {
+          setError(err.message)
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled && viewSessionIdRef.current === targetId) {
+          setLoading(false)
+        }
       })
     return () => {
       cancelled = true
@@ -209,9 +264,22 @@ export function ChatView({
     [applyModelCwd, draftMode, sessionId],
   )
 
+  function isViewingSession(id: string | null | undefined): boolean {
+    return !!id && viewSessionIdRef.current === id
+  }
+
   async function handleSend(text: string) {
     setError(null)
     let activeId = sessionId || activeIdRef.current
+
+    // One live stream at a time in this SPA instance. Switching chats does not
+    // cancel background work, but starting a new send on another session does.
+    if (abortRef.current && streamSessionIdRef.current && streamSessionIdRef.current !== activeId) {
+      abortRef.current.abort()
+      abortRef.current = null
+      streamSessionIdRef.current = null
+      setStreaming(null)
+    }
 
     try {
       if (draftMode || !activeId) {
@@ -226,6 +294,7 @@ export function ChatView({
         activeId = created.id
         activeIdRef.current = created.id
         loadedIdRef.current = created.id
+        viewSessionIdRef.current = created.id
         setSession(created)
         setMessages(created.messages || [])
         if (created.cwd) {
@@ -241,33 +310,65 @@ export function ChatView({
         activeIdRef.current = activeId
       }
 
+      const streamId = activeId!
+      streamSessionIdRef.current = streamId
+      streamBuffersRef.current.set(streamId, { text: '', tools: [] })
+
       const userMsg: Message = {
         id: `local-${Date.now()}`,
         role: 'user',
         content: text,
         created_at: new Date().toISOString(),
       }
-      setMessages((prev) => [...prev, userMsg])
-      setStreaming({ text: '', tools: [], active: true })
+      if (isViewingSession(streamId)) {
+        setMessages((prev) => [...prev, userMsg])
+        setStreaming({ text: '', tools: [], active: true })
+      }
 
       const ac = new AbortController()
       abortRef.current = ac
       const toolsMap = new Map<string, ToolCard>()
 
+      const touchBuffer = (patch: {
+        text?: string
+        tools?: ToolCard[]
+        tasks?: AgentTask[]
+      }) => {
+        const prev = streamBuffersRef.current.get(streamId) || {
+          text: '',
+          tools: [],
+        }
+        streamBuffersRef.current.set(streamId, {
+          text: patch.text ?? prev.text,
+          tools: patch.tools ?? prev.tools,
+          tasks: patch.tasks ?? prev.tasks,
+        })
+      }
+
       await streamMessage(
-        activeId!,
+        streamId,
         text,
         (event, data) => {
+          // Always keep sidebar metadata fresh; only mutate main pane when
+          // the user is still looking at the streaming session.
+          const viewing = isViewingSession(streamId)
+
           if (event === 'meta') {
             if (Array.isArray(data.tasks)) {
-              setTasks(data.tasks as AgentTask[])
+              const tasks = data.tasks as AgentTask[]
+              touchBuffer({ tasks })
+              if (viewing) setTasks(tasks)
             }
           } else if (event === 'text_delta') {
             const chunk = String(data.text ?? '')
-            setStreaming((prev) =>
-              prev
-                ? { ...prev, text: prev.text + chunk, active: true }
-                : { text: chunk, tools: [], active: true },
+            const prev = streamBuffersRef.current.get(streamId)
+            const nextText = (prev?.text || '') + chunk
+            touchBuffer({ text: nextText })
+            if (!viewing) return
+            setStreaming((s) =>
+              s
+                ? { ...s, text: nextText, active: true }
+                : { text: nextText, tools: [], active: true },
             )
           } else if (event === 'tool_start') {
             const card: ToolCard = {
@@ -280,9 +381,12 @@ export function ChatView({
               ok: true,
             }
             toolsMap.set(card.id, card)
-            setStreaming((prev) => ({
-              text: prev?.text || '',
-              tools: Array.from(toolsMap.values()),
+            const tools = Array.from(toolsMap.values())
+            touchBuffer({ tools })
+            if (!viewing) return
+            setStreaming((s) => ({
+              text: s?.text || streamBuffersRef.current.get(streamId)?.text || '',
+              tools,
               active: true,
             }))
           } else if (event === 'tool_end') {
@@ -298,36 +402,54 @@ export function ChatView({
             existing.ok = data.ok !== false
             if (data.name) existing.name = String(data.name)
             toolsMap.set(id, existing)
-            setStreaming((prev) => ({
-              text: prev?.text || '',
-              tools: Array.from(toolsMap.values()),
+            const tools = Array.from(toolsMap.values())
+            touchBuffer({ tools })
+            if (!viewing) return
+            setStreaming((s) => ({
+              text: s?.text || streamBuffersRef.current.get(streamId)?.text || '',
+              tools,
               active: true,
             }))
           } else if (event === 'task_create' || event === 'task_update') {
             const task = data.task as AgentTask | undefined
             if (task && task.id != null) {
-              setTasks((prev) => upsertTask(prev, task))
-              // Auto-open only briefly useful when first task appears; keep collapsed otherwise.
-              setTasksOpen((prev) => prev)
+              if (viewing) {
+                setTasks((prev) => {
+                  const next = upsertTask(prev, task)
+                  touchBuffer({ tasks: next })
+                  return next
+                })
+              } else {
+                const prevTasks =
+                  streamBuffersRef.current.get(streamId)?.tasks || []
+                touchBuffer({ tasks: upsertTask(prevTasks, task) })
+              }
             } else if (Array.isArray(data.tasks)) {
-              setTasks(data.tasks as AgentTask[])
+              const tasks = data.tasks as AgentTask[]
+              touchBuffer({ tasks })
+              if (viewing) setTasks(tasks)
             }
           } else if (event === 'error') {
-            setError(String(data.message ?? 'Agent error'))
+            if (viewing) setError(String(data.message ?? 'Agent error'))
           } else if (event === 'done') {
             if (Array.isArray(data.tasks)) {
-              setTasks(data.tasks as AgentTask[])
+              const tasks = data.tasks as AgentTask[]
+              touchBuffer({ tasks })
+              if (viewing) setTasks(tasks)
             }
           }
         },
         ac.signal,
       )
 
-      const fresh = await getSession(activeId!)
-      setSession(fresh)
-      setMessages(fresh.messages || [])
-      setTasks(Array.isArray(fresh.tasks) ? fresh.tasks : [])
+      const fresh = await getSession(streamId)
+      // Sidebar always updates; main pane only if still viewing this session.
       onSessionUpdated(fresh)
+      if (isViewingSession(streamId)) {
+        setSession(fresh)
+        setMessages(fresh.messages || [])
+        setTasks(Array.isArray(fresh.tasks) ? fresh.tasks : [])
+      }
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
         const msg =
@@ -336,36 +458,63 @@ export function ChatView({
             : err instanceof Error
               ? err.message
               : 'Send failed'
-        setError(msg)
+        if (isViewingSession(activeId)) setError(msg)
       }
       if (activeId) {
         try {
           const fresh = await getSession(activeId)
-          setSession(fresh)
-          setMessages(fresh.messages || [])
-          setTasks(Array.isArray(fresh.tasks) ? fresh.tasks : [])
           onSessionUpdated(fresh)
+          if (isViewingSession(activeId)) {
+            setSession(fresh)
+            setMessages(fresh.messages || [])
+            setTasks(Array.isArray(fresh.tasks) ? fresh.tasks : [])
+          }
         } catch {
           /* ignore */
         }
       }
     } finally {
-      setStreaming(null)
-      abortRef.current = null
+      if (activeId) streamBuffersRef.current.delete(activeId)
+      if (streamSessionIdRef.current === activeId) {
+        streamSessionIdRef.current = null
+        abortRef.current = null
+      }
+      // Clear stream chrome only if the user is still on this session.
+      if (isViewingSession(activeId)) {
+        setStreaming(null)
+      }
     }
   }
 
   async function handleStop() {
-    abortRef.current?.abort()
+    // Stop only the session currently on screen (or its draft-created id).
     const id = sessionId || activeIdRef.current || session?.id || null
-    if (id) {
+    if (!id) return
+
+    if (streamSessionIdRef.current === id) {
+      abortRef.current?.abort()
+      abortRef.current = null
+      streamSessionIdRef.current = null
+      streamBuffersRef.current.delete(id)
+      setStreaming(null)
+    }
+    try {
+      await stopSession(id)
+    } catch {
+      /* ignore */
+    }
+    // Refresh status if still viewing.
+    if (isViewingSession(id)) {
       try {
-        await stopSession(id)
+        const fresh = await getSession(id)
+        setSession(fresh)
+        setMessages(fresh.messages || [])
+        setTasks(Array.isArray(fresh.tasks) ? fresh.tasks : [])
+        onSessionUpdated(fresh)
       } catch {
         /* ignore */
       }
     }
-    setStreaming((prev) => (prev ? { ...prev, active: false } : null))
   }
 
   function handleSuggestion(text: string) {

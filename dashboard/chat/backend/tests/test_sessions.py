@@ -76,6 +76,39 @@ def test_create_defaults_model_to_grok(monkeypatch, tmp_path):
     assert session_file.is_file()
 
 
+def test_create_accepts_trailing_slash_and_home_tilde(monkeypatch, tmp_path, tmp_path_factory):
+    c = _client(monkeypatch, tmp_path)
+    cwd = tmp_path / "proj"
+    cwd.mkdir()
+
+    # trailing slash should normalize
+    r = c.post(
+        "/api/sessions",
+        headers=_auth_headers(),
+        json={"cwd": str(cwd) + "/"},
+    )
+    assert r.status_code == 200
+    assert r.json()["cwd"] == str(cwd.resolve())
+
+    # ~/... expands via Path.expanduser
+    home = Path.home()
+    target = home / ".chat_cwd_test_dir"
+    target.mkdir(exist_ok=True)
+    try:
+        r2 = c.post(
+            "/api/sessions",
+            headers=_auth_headers(),
+            json={"cwd": f"~/{target.name}"},
+        )
+        assert r2.status_code == 200
+        assert r2.json()["cwd"] == str(target.resolve())
+    finally:
+        try:
+            target.rmdir()
+        except OSError:
+            pass
+
+
 def test_list_get_patch_delete(monkeypatch, tmp_path):
     c = _client(monkeypatch, tmp_path)
     cwd = tmp_path / "workspace"

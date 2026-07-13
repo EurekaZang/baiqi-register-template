@@ -83,7 +83,13 @@ export function ChatView({
   const [session, setSession] = useState<SessionSummary | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [tasks, setTasks] = useState<AgentTask[]>([])
-  const [cwd, setCwd] = useState('')
+  const [cwd, setCwd] = useState(() => {
+    try {
+      return localStorage.getItem('chat_last_cwd') || ''
+    } catch {
+      return ''
+    }
+  })
   const [model, setModel] = useState(defaultModel)
   const [streaming, setStreaming] = useState<StreamState>(null)
   const [error, setError] = useState<string | null>(null)
@@ -166,12 +172,41 @@ export function ChatView({
       try {
         const updated = await patchSession(sessionId, next)
         setSession(updated)
+        if (updated.cwd) {
+          setCwd(updated.cwd)
+          try {
+            localStorage.setItem('chat_last_cwd', updated.cwd)
+          } catch {
+            /* ignore */
+          }
+        }
         onSessionUpdated(updated)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Update failed')
       }
     },
     [sessionId, draftMode, onSessionUpdated],
+  )
+
+  const handleCwdDraftChange = useCallback((v: string) => {
+    setCwd(v)
+    setError(null)
+  }, [])
+
+  const handleCwdCommit = useCallback(
+    (v: string) => {
+      const next = v.trim()
+      setCwd(next)
+      try {
+        if (next) localStorage.setItem('chat_last_cwd', next)
+      } catch {
+        /* ignore */
+      }
+      if (!draftMode && sessionId) {
+        void applyModelCwd({ cwd: next })
+      }
+    },
+    [applyModelCwd, draftMode, sessionId],
   )
 
   async function handleSend(text: string) {
@@ -193,6 +228,14 @@ export function ChatView({
         loadedIdRef.current = created.id
         setSession(created)
         setMessages(created.messages || [])
+        if (created.cwd) {
+          setCwd(created.cwd)
+          try {
+            localStorage.setItem('chat_last_cwd', created.cwd)
+          } catch {
+            /* ignore */
+          }
+        }
         onSessionCreated(created)
       } else {
         activeIdRef.current = activeId
@@ -372,10 +415,8 @@ export function ChatView({
             <div className="header-controls">
               <CwdPicker
                 value={headerCwd}
-                onChange={(v) => {
-                  setCwd(v)
-                  if (!draftMode && sessionId) void applyModelCwd({ cwd: v })
-                }}
+                onChange={handleCwdDraftChange}
+                onCommit={handleCwdCommit}
                 disabled={running}
               />
               <ModelSelect

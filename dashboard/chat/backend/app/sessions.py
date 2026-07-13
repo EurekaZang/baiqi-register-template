@@ -50,29 +50,48 @@ def _write_json(path: Path, data: Any) -> None:
     tmp.replace(path)
 
 
+def normalize_cwd_input(cwd: str) -> str:
+    """Expand ~ and tidy slashes/spaces for user-entered paths."""
+    text = (cwd or "").strip()
+    if not text:
+        return text
+    # Expand ~/... and bare ~
+    if text == "~" or text.startswith("~/") or text.startswith("~\\"):
+        text = str(Path(text).expanduser())
+    # Collapse accidental whitespace around separators
+    text = text.replace("\\", "/")
+    while "//" in text:
+        text = text.replace("//", "/")
+    # Keep root "/" intact; strip trailing slash elsewhere
+    if len(text) > 1:
+        text = text.rstrip("/")
+    return text
+
+
 def validate_cwd(cwd: str) -> Path:
     if not cwd or not isinstance(cwd, str):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="cwd must be an absolute existing directory",
         )
-    path = Path(cwd)
+    normalized = normalize_cwd_input(cwd)
+    path = Path(normalized)
     if not path.is_absolute():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cwd must be an absolute existing directory",
+            detail="cwd must be an absolute existing directory (tip: use /home/... or ~/...)",
         )
     try:
         resolved = path.resolve(strict=True)
     except (FileNotFoundError, OSError):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cwd must be an absolute existing directory",
+            detail=f"cwd does not exist: {normalized}",
         ) from None
     if not resolved.is_dir():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cwd must be an absolute existing directory",
+            detail=f"cwd is not a directory: {normalized}",
         )
     return resolved
 
@@ -87,7 +106,27 @@ def load_recent_cwds() -> list[str]:
         return []
     if not isinstance(data, list):
         return []
-    return [item for item in data if isinstance(item, str)]
+    # Normalize + drop missing dirs so the picker never offers dead paths
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in data:
+        if not isinstance(item, str):
+            continue
+        try:
+            resolved = str(validate_cwd(item))
+        except HTTPException:
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        cleaned.append(resolved)
+    if cleaned != [i for i in data if isinstance(i, str)][: len(cleaned)]:
+        # Persist cleanup best-effort
+        try:
+            save_recent_cwds(cleaned)
+        except OSError:
+            pass
+    return cleaned
 
 
 def save_recent_cwds(items: list[str]) -> None:
@@ -95,8 +134,12 @@ def save_recent_cwds(items: list[str]) -> None:
 
 
 def touch_recent_cwd(cwd: str) -> list[str]:
-    items = [c for c in load_recent_cwds() if c != cwd]
-    items.insert(0, cwd)
+    try:
+        resolved = str(validate_cwd(cwd))
+    except HTTPException:
+        resolved = normalize_cwd_input(cwd)
+    items = [c for c in load_recent_cwds() if c != resolved]
+    items.insert(0, resolved)
     items = items[:RECENT_CWD_LIMIT]
     save_recent_cwds(items)
     return items

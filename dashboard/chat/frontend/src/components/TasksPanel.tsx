@@ -1,20 +1,31 @@
-import type { ReactNode } from 'react'
-import { CheckCircle2, Circle, Loader2, ListTodo } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  CheckCircle2,
+  ChevronDown,
+  Circle,
+  ListTodo,
+  Loader2,
+  X,
+} from 'lucide-react'
 import type { AgentTask } from '../api'
 import { Badge } from './ui/badge'
+import { Button } from './ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { ScrollArea } from './ui/scroll-area'
 import { Separator } from './ui/separator'
+import { Tooltip } from './ui/tooltip'
 import { cn } from '../lib/utils'
 
 type Props = {
   tasks: AgentTask[]
+  open: boolean
+  onOpenChange: (open: boolean) => void
   className?: string
-  compact?: boolean
 }
 
 function statusMeta(status?: string): {
   label: string
+  short: string
   variant: 'default' | 'accent' | 'success' | 'warn' | 'danger'
   icon: ReactNode
 } {
@@ -22,113 +33,256 @@ function statusMeta(status?: string): {
     case 'in_progress':
       return {
         label: 'In progress',
+        short: 'Run',
         variant: 'accent',
         icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
       }
     case 'completed':
       return {
         label: 'Completed',
+        short: 'Done',
         variant: 'success',
         icon: <CheckCircle2 className="h-3.5 w-3.5" />,
       }
     case 'deleted':
       return {
         label: 'Deleted',
+        short: 'Del',
         variant: 'danger',
         icon: <Circle className="h-3.5 w-3.5" />,
       }
     default:
       return {
         label: 'Pending',
+        short: 'Todo',
         variant: 'default',
         icon: <Circle className="h-3.5 w-3.5" />,
       }
   }
 }
 
-export function TasksPanel({ tasks, className, compact }: Props) {
-  const visible = tasks.filter((t) => (t.status || 'pending') !== 'deleted')
+export function TasksPanel({ tasks, open, onOpenChange, className }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  const visible = useMemo(
+    () => tasks.filter((t) => (t.status || 'pending') !== 'deleted'),
+    [tasks],
+  )
   const completed = visible.filter((t) => t.status === 'completed').length
+  const running = visible.filter((t) => t.status === 'in_progress')
+  const pending = visible.filter(
+    (t) => (t.status || 'pending') === 'pending' || t.provisional,
+  )
   const total = visible.length
+  const pct = total ? Math.round((completed / total) * 100) : 0
+  const focus =
+    running[0] ||
+    pending[0] ||
+    visible.find((t) => t.status !== 'completed') ||
+    visible[0] ||
+    null
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onOpenChange(false)
+    }
+    const onPointer = (e: MouseEvent) => {
+      const el = rootRef.current
+      if (!el) return
+      if (e.target instanceof Node && !el.contains(e.target)) {
+        onOpenChange(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('mousedown', onPointer)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('mousedown', onPointer)
+    }
+  }, [open, onOpenChange])
 
   if (total === 0) {
     return (
-      <Card className={cn('tasks-panel empty', className)}>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <ListTodo className="h-4 w-4 text-sky-600" />
+      <div className={cn('tasks-rail empty', className)} ref={rootRef}>
+        <Tooltip content="No agent tasks yet">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="tasks-chip h-8 px-2.5 text-xs text-slate-500"
+            onClick={() => onOpenChange(!open)}
+          >
+            <ListTodo className="h-3.5 w-3.5" />
             Tasks
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <p className="text-xs text-slate-500">
-            Agent tasks will appear here when TaskCreate / TaskUpdate tools run.
-          </p>
-        </CardContent>
-      </Card>
+          </Button>
+        </Tooltip>
+        {open ? (
+          <Card className="tasks-popover shadow-lg">
+            <CardHeader className="flex-row items-center justify-between space-y-0 p-3">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <ListTodo className="h-4 w-4 text-sky-600" />
+                Tasks
+              </CardTitle>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => onOpenChange(false)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </CardHeader>
+            <CardContent className="px-3 pb-3 pt-0">
+              <p className="text-xs leading-relaxed text-slate-500">
+                When the agent calls TaskCreate / TaskUpdate, tasks show here as a
+                compact checklist without covering the chat.
+              </p>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
     )
   }
 
   return (
-    <Card className={cn('tasks-panel', className)}>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <ListTodo className="h-4 w-4 text-sky-600" />
-            Tasks
-          </CardTitle>
-          <Badge variant="accent">
+    <div className={cn('tasks-rail', className)} ref={rootRef}>
+      <Tooltip content={open ? 'Collapse tasks' : 'Expand task checklist'}>
+        <Button
+          type="button"
+          variant={open ? 'secondary' : 'outline'}
+          size="sm"
+          className="tasks-chip h-8 gap-1.5 px-2.5 text-xs"
+          onClick={() => onOpenChange(!open)}
+          aria-expanded={open}
+        >
+          <ListTodo className="h-3.5 w-3.5 text-sky-600" />
+          <span className="font-medium">Tasks</span>
+          <Badge variant="accent" className="h-5 px-1.5 text-[10px]">
             {completed}/{total}
           </Badge>
-        </div>
-        <div className="tasks-progress mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-sky-500 transition-all"
-            style={{ width: `${total ? Math.round((completed / total) * 100) : 0}%` }}
+          {running.length > 0 ? (
+            <span className="tasks-chip-live">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {running.length}
+            </span>
+          ) : null}
+          <span className="tasks-chip-meter" aria-hidden>
+            <span style={{ width: `${pct}%` }} />
+          </span>
+          <ChevronDown
+            className={cn(
+              'h-3.5 w-3.5 text-slate-400 transition-transform',
+              open ? 'rotate-180' : '',
+            )}
           />
+        </Button>
+      </Tooltip>
+
+      {!open && focus ? (
+        <div className="tasks-focus-line" title={focus.description || focus.subject}>
+          <span className="tasks-focus-dot" data-status={focus.status || 'pending'} />
+          <span className="tasks-focus-text">
+            {focus.status === 'in_progress' && focus.activeForm
+              ? focus.activeForm
+              : focus.subject || `Task ${focus.id}`}
+          </span>
         </div>
-      </CardHeader>
-      <Separator />
-      <CardContent className={cn('p-0', compact ? 'max-h-48' : 'max-h-72')}>
-        <ScrollArea className={cn(compact ? 'max-h-48' : 'max-h-72')}>
-          <ul className="divide-y divide-slate-100">
-            {visible.map((task) => {
-              const meta = statusMeta(task.status)
-              return (
-                <li key={task.id} className="task-item px-3 py-2.5">
-                  <div className="flex items-start gap-2">
-                    <span className="mt-0.5 text-slate-500">{meta.icon}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-medium text-slate-900">
-                          {task.subject || `Task ${task.id}`}
+      ) : null}
+
+      {open ? (
+        <Card className="tasks-popover shadow-lg">
+          <CardHeader className="space-y-2 p-3 pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <ListTodo className="h-4 w-4 text-sky-600" />
+                Checklist
+              </CardTitle>
+              <div className="flex items-center gap-1.5">
+                <Badge variant="accent" className="text-[10px]">
+                  {completed}/{total}
+                </Badge>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => onOpenChange(false)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+            <div className="tasks-progress h-1 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-sky-500 transition-all"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            {focus ? (
+              <div className="rounded-md border border-sky-100 bg-sky-50/70 px-2 py-1.5 text-[11px] text-sky-800">
+                <span className="font-semibold">Now: </span>
+                {focus.status === 'in_progress' && focus.activeForm
+                  ? focus.activeForm
+                  : focus.subject || `Task ${focus.id}`}
+              </div>
+            ) : null}
+          </CardHeader>
+          <Separator />
+          <CardContent className="p-0">
+            <ScrollArea className="max-h-56">
+              <ul className="divide-y divide-slate-100">
+                {visible.map((task) => {
+                  const meta = statusMeta(task.status)
+                  const isOpen = expandedId === String(task.id)
+                  return (
+                    <li key={task.id} className="task-item">
+                      <button
+                        type="button"
+                        className="task-row"
+                        onClick={() =>
+                          setExpandedId(isOpen ? null : String(task.id))
+                        }
+                      >
+                        <span className="task-row-icon">{meta.icon}</span>
+                        <span className="task-row-main">
+                          <span className="task-row-title">
+                            {task.subject || `Task ${task.id}`}
+                          </span>
+                          {task.status === 'in_progress' && task.activeForm ? (
+                            <span className="task-row-sub">{task.activeForm}</span>
+                          ) : null}
                         </span>
-                        <Badge variant={meta.variant} className="shrink-0">
-                          {meta.label}
+                        <Badge variant={meta.variant} className="shrink-0 text-[10px]">
+                          {meta.short}
                         </Badge>
-                      </div>
-                      {task.activeForm && task.status === 'in_progress' ? (
-                        <div className="mt-0.5 text-xs text-sky-700">
-                          {task.activeForm}
+                      </button>
+                      {isOpen ? (
+                        <div className="task-details">
+                          {task.description ? (
+                            <p>{task.description}</p>
+                          ) : (
+                            <p className="text-slate-400">No description</p>
+                          )}
+                          <div className="task-meta-line">
+                            #{task.id}
+                            {task.provisional ? ' · provisional' : ''}
+                            {task.updated_at
+                              ? ` · ${new Date(task.updated_at).toLocaleTimeString()}`
+                              : ''}
+                          </div>
                         </div>
                       ) : null}
-                      {task.description ? (
-                        <p className="mt-1 line-clamp-2 text-xs text-slate-500">
-                          {task.description}
-                        </p>
-                      ) : null}
-                      <div className="mt-1 font-mono text-[10px] text-slate-400">
-                        #{task.id}
-                        {task.provisional ? ' · provisional' : ''}
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+                    </li>
+                  )
+                })}
+              </ul>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
   )
 }

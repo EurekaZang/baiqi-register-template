@@ -11,7 +11,7 @@ import {
   type SessionSummary,
   type ToolCard,
 } from '../api'
-import { Boxes, ListTodo } from 'lucide-react'
+import { Boxes } from 'lucide-react'
 import { extractArtifacts, type Artifact } from '../lib/content'
 import { ArtifactsPanel } from './ArtifactsPanel'
 import { Composer } from './Composer'
@@ -90,7 +90,7 @@ export function ChatView({
   const [loading, setLoading] = useState(false)
   const [seedText, setSeedText] = useState<string | undefined>(undefined)
   const [artifactsOpen, setArtifactsOpen] = useState(false)
-  const [tasksOpen, setTasksOpen] = useState(true)
+  const [tasksOpen, setTasksOpen] = useState(false)
   const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -130,7 +130,7 @@ export function ChatView({
         setTasks(Array.isArray(s.tasks) ? s.tasks : [])
         setCwd(s.cwd || '')
         setModel(s.model || defaultModel)
-        if ((s.tasks || []).length > 0) setTasksOpen(true)
+        // Keep tasks collapsed by default to avoid covering chat.
       })
       .catch((err: Error) => {
         if (!cancelled) setError(err.message)
@@ -264,7 +264,8 @@ export function ChatView({
             const task = data.task as AgentTask | undefined
             if (task && task.id != null) {
               setTasks((prev) => upsertTask(prev, task))
-              setTasksOpen(true)
+              // Auto-open only briefly useful when first task appears; keep collapsed otherwise.
+              setTasksOpen((prev) => prev)
             } else if (Array.isArray(data.tasks)) {
               setTasks(data.tasks as AgentTask[])
             }
@@ -346,10 +347,6 @@ export function ChatView({
       : draftMode
         ? 'New chat'
         : session?.title || 'Chat'
-  const activeTaskCount = tasks.filter(
-    (t) => (t.status || 'pending') !== 'deleted',
-  ).length
-
   return (
     <section className={`chat-view ${artifactsOpen ? 'with-artifacts' : ''}`}>
       <div className="chat-main-col">
@@ -393,16 +390,11 @@ export function ChatView({
             </div>
           </div>
           <div className="header-right">
-            <Tooltip content={tasksOpen ? 'Hide tasks panel' : 'Show tasks panel'}>
-              <Button
-                type="button"
-                variant={tasksOpen ? 'secondary' : 'ghost'}
-                onClick={() => setTasksOpen((v) => !v)}
-              >
-                <ListTodo className="h-4 w-4" />
-                Tasks{activeTaskCount ? ` (${activeTaskCount})` : ''}
-              </Button>
-            </Tooltip>
+            <TasksPanel
+              tasks={tasks}
+              open={tasksOpen}
+              onOpenChange={setTasksOpen}
+            />
             <Tooltip content={artifactsOpen ? 'Hide artifacts panel' : 'Show artifacts panel'}>
               <Button
                 type="button"
@@ -418,12 +410,6 @@ export function ChatView({
         </header>
 
         {error && <div className="error-banner">{error}</div>}
-
-        {tasksOpen ? (
-          <div className="tasks-inline px-3 pt-3">
-            <TasksPanel tasks={tasks} compact />
-          </div>
-        ) : null}
 
         <div className="chat-scroll" ref={listRef}>
           {loading ? (

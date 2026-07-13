@@ -30,6 +30,11 @@ export function Sidebar({
 }: Props) {
   return (
     <aside className="sidebar">
+      <div className="sidebar-brand">
+        <a href="/" className="brand-link" title="Back to dashboard">
+          <span className="brand-accent">8090</span> Chat
+        </a>
+      </div>
       <div className="sidebar-top">
         <button type="button" className="btn primary block" onClick={onNew}>
           + New chat

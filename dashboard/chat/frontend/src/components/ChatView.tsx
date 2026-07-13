@@ -6,20 +6,64 @@ import {
   patchSession,
   stopSession,
   streamMessage,
+  type AgentTask,
   type Message,
   type SessionSummary,
   type ToolCard,
 } from '../api'
-import { Boxes } from 'lucide-react'
+import { Boxes, ListTodo } from 'lucide-react'
 import { extractArtifacts, type Artifact } from '../lib/content'
 import { ArtifactsPanel } from './ArtifactsPanel'
 import { Composer } from './Composer'
 import { CwdPicker } from './CwdPicker'
 import { MessageList, type StreamState } from './MessageList'
 import { ModelSelect } from './ModelSelect'
+import { TasksPanel } from './TasksPanel'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Tooltip } from './ui/tooltip'
+
+function upsertTask(list: AgentTask[], task: AgentTask): AgentTask[] {
+  const id = String(task.id)
+  const idx = list.findIndex((t) => String(t.id) === id)
+  // Also replace provisional tmp:* with same source tool if final id arrives.
+  const byTool = task.source_tool_use_id
+    ? list.findIndex(
+        (t) =>
+          t.source_tool_use_id === task.source_tool_use_id &&
+          String(t.id) !== id,
+      )
+    : -1
+  let next = [...list]
+  if (byTool >= 0 && idx < 0) {
+    next.splice(byTool, 1, task)
+  } else if (idx >= 0) {
+    next[idx] = { ...next[idx], ...task }
+  } else {
+    next.push(task)
+  }
+  // Keep active work near top: in_progress, pending, completed, deleted
+  const rank = (s?: string) => {
+    switch ((s || 'pending').toLowerCase()) {
+      case 'in_progress':
+        return 0
+      case 'pending':
+        return 1
+      case 'completed':
+        return 2
+      case 'deleted':
+        return 3
+      default:
+        return 4
+    }
+  }
+  next.sort((a, b) => {
+    const r = rank(a.status) - rank(b.status)
+    if (r !== 0) return r
+    return String(a.id).localeCompare(String(b.id), undefined, { numeric: true })
+  })
+  return next
+}
 
 type Props = {
   sessionId: string | null
@@ -38,6 +82,7 @@ export function ChatView({
 }: Props) {
   const [session, setSession] = useState<SessionSummary | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [tasks, setTasks] = useState<AgentTask[]>([])
   const [cwd, setCwd] = useState('')
   const [model, setModel] = useState(defaultModel)
   const [streaming, setStreaming] = useState<StreamState>(null)
@@ -45,6 +90,7 @@ export function ChatView({
   const [loading, setLoading] = useState(false)
   const [seedText, setSeedText] = useState<string | undefined>(undefined)
   const [artifactsOpen, setArtifactsOpen] = useState(false)
+  const [tasksOpen, setTasksOpen] = useState(true)
   const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -59,6 +105,7 @@ export function ChatView({
       activeIdRef.current = null
       setSession(null)
       setMessages([])
+      setTasks([])
       setCwd('')
       setModel(defaultModel)
       setStreaming(null)
@@ -80,8 +127,10 @@ export function ChatView({
         activeIdRef.current = s.id
         setSession(s)
         setMessages(s.messages || [])
+        setTasks(Array.isArray(s.tasks) ? s.tasks : [])
         setCwd(s.cwd || '')
         setModel(s.model || defaultModel)
+        if ((s.tasks || []).length > 0) setTasksOpen(true)
       })
       .catch((err: Error) => {
         if (!cancelled) setError(err.message)
@@ -166,7 +215,11 @@ export function ChatView({
         activeId!,
         text,
         (event, data) => {
-          if (event === 'text_delta') {
+          if (event === 'meta') {
+            if (Array.isArray(data.tasks)) {
+              setTasks(data.tasks as AgentTask[])
+            }
+          } else if (event === 'text_delta') {
             const chunk = String(data.text ?? '')
             setStreaming((prev) =>
               prev
@@ -207,8 +260,20 @@ export function ChatView({
               tools: Array.from(toolsMap.values()),
               active: true,
             }))
+          } else if (event === 'task_create' || event === 'task_update') {
+            const task = data.task as AgentTask | undefined
+            if (task && task.id != null) {
+              setTasks((prev) => upsertTask(prev, task))
+              setTasksOpen(true)
+            } else if (Array.isArray(data.tasks)) {
+              setTasks(data.tasks as AgentTask[])
+            }
           } else if (event === 'error') {
             setError(String(data.message ?? 'Agent error'))
+          } else if (event === 'done') {
+            if (Array.isArray(data.tasks)) {
+              setTasks(data.tasks as AgentTask[])
+            }
           }
         },
         ac.signal,
@@ -217,6 +282,7 @@ export function ChatView({
       const fresh = await getSession(activeId!)
       setSession(fresh)
       setMessages(fresh.messages || [])
+      setTasks(Array.isArray(fresh.tasks) ? fresh.tasks : [])
       onSessionUpdated(fresh)
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
@@ -233,6 +299,7 @@ export function ChatView({
           const fresh = await getSession(activeId)
           setSession(fresh)
           setMessages(fresh.messages || [])
+          setTasks(Array.isArray(fresh.tasks) ? fresh.tasks : [])
           onSessionUpdated(fresh)
         } catch {
           /* ignore */
@@ -279,6 +346,9 @@ export function ChatView({
       : draftMode
         ? 'New chat'
         : session?.title || 'Chat'
+  const activeTaskCount = tasks.filter(
+    (t) => (t.status || 'pending') !== 'deleted',
+  ).length
 
   return (
     <section className={`chat-view ${artifactsOpen ? 'with-artifacts' : ''}`}>
@@ -323,6 +393,16 @@ export function ChatView({
             </div>
           </div>
           <div className="header-right">
+            <Tooltip content={tasksOpen ? 'Hide tasks panel' : 'Show tasks panel'}>
+              <Button
+                type="button"
+                variant={tasksOpen ? 'secondary' : 'ghost'}
+                onClick={() => setTasksOpen((v) => !v)}
+              >
+                <ListTodo className="h-4 w-4" />
+                Tasks{activeTaskCount ? ` (${activeTaskCount})` : ''}
+              </Button>
+            </Tooltip>
             <Tooltip content={artifactsOpen ? 'Hide artifacts panel' : 'Show artifacts panel'}>
               <Button
                 type="button"
@@ -338,6 +418,12 @@ export function ChatView({
         </header>
 
         {error && <div className="error-banner">{error}</div>}
+
+        {tasksOpen ? (
+          <div className="tasks-inline px-3 pt-3">
+            <TasksPanel tasks={tasks} compact />
+          </div>
+        ) : null}
 
         <div className="chat-scroll" ref={listRef}>
           {loading ? (

@@ -28,6 +28,15 @@ from .auth import require_token
 from .config import settings
 from .sessions import get_session, save_session
 from .sse import format_sse
+from .tasks import (
+    TASK_CREATE_TOOLS,
+    TASK_TOOLS,
+    TASK_UPDATE_TOOLS,
+    apply_task_create,
+    apply_task_update,
+    parse_task_id_from_result,
+    provisional_create_from_tool_start,
+)
 
 router = APIRouter(dependencies=[Depends(require_token)])
 
@@ -81,6 +90,8 @@ class TurnAccumulator:
     text_parts: list[str] = field(default_factory=list)
     tools: list[dict[str, Any]] = field(default_factory=list)
     tools_by_id: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # tool_use_id → pending task tool metadata for create/update finalization
+    task_tool_meta: dict[str, dict[str, Any]] = field(default_factory=dict)
     sdk_session_id: str | None = None
     usage: dict[str, Any] | None = None
     total_cost_usd: float | None = None
@@ -100,6 +111,12 @@ class TurnAccumulator:
         }
         self.tools.append(card)
         self.tools_by_id[tool_id] = card
+        if name in TASK_TOOLS:
+            payload = input_data if isinstance(input_data, dict) else {}
+            self.task_tool_meta[tool_id] = {
+                "name": name,
+                "input": payload,
+            }
         return card
 
     def end_tool(
@@ -141,7 +158,117 @@ class TurnAccumulator:
         }
 
 
-def map_sdk_message(msg: Any, acc: TurnAccumulator | None = None) -> list[dict[str, Any]]:
+def _task_events_for_tool_start(
+    session: dict[str, Any] | None,
+    *,
+    tool_id: str,
+    name: str,
+    input_data: Any,
+) -> list[dict[str, Any]]:
+    if session is None or name not in TASK_TOOLS:
+        return []
+    payload = input_data if isinstance(input_data, dict) else {}
+    events: list[dict[str, Any]] = []
+    if name in TASK_CREATE_TOOLS:
+        task = provisional_create_from_tool_start(
+            session,
+            tool_use_id=tool_id,
+            payload=payload,
+        )
+        events.append(
+            {
+                "event": "task_create",
+                "data": {
+                    "task": task,
+                    "tool_use_id": tool_id,
+                    "provisional": True,
+                },
+            }
+        )
+    elif name in TASK_UPDATE_TOOLS:
+        task = apply_task_update(
+            session,
+            tool_use_id=tool_id,
+            payload=payload,
+        )
+        if task is not None:
+            events.append(
+                {
+                    "event": "task_update",
+                    "data": {
+                        "task": task,
+                        "tool_use_id": tool_id,
+                        "patch": payload,
+                    },
+                }
+            )
+    return events
+
+
+def _task_events_for_tool_end(
+    session: dict[str, Any] | None,
+    acc: TurnAccumulator | None,
+    *,
+    tool_id: str,
+    name: str,
+    output: Any,
+    is_error: bool | None,
+) -> list[dict[str, Any]]:
+    if session is None or acc is None:
+        return []
+    meta = acc.task_tool_meta.get(tool_id)
+    tool_name = (meta or {}).get("name") or name
+    if tool_name not in TASK_TOOLS:
+        return []
+    if is_error:
+        return []
+    payload = (meta or {}).get("input") if isinstance((meta or {}).get("input"), dict) else {}
+    events: list[dict[str, Any]] = []
+    if tool_name in TASK_CREATE_TOOLS:
+        result_id = parse_task_id_from_result(output)
+        task = apply_task_create(
+            session,
+            tool_use_id=tool_id,
+            payload=payload,
+            result_task_id=result_id,
+        )
+        events.append(
+            {
+                "event": "task_create",
+                "data": {
+                    "task": task,
+                    "tool_use_id": tool_id,
+                    "provisional": False,
+                },
+            }
+        )
+    elif tool_name in TASK_UPDATE_TOOLS:
+        # Re-apply with same payload to keep store consistent after success.
+        task = apply_task_update(
+            session,
+            tool_use_id=tool_id,
+            payload=payload,
+        )
+        if task is not None:
+            events.append(
+                {
+                    "event": "task_update",
+                    "data": {
+                        "task": task,
+                        "tool_use_id": tool_id,
+                        "patch": payload,
+                    },
+                }
+            )
+    return events
+
+
+def map_sdk_message(
+    msg: Any,
+    acc: TurnAccumulator | None = None,
+    *,
+    session: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """
     Map one SDK message object to zero or more SSE event dicts.
 
@@ -174,6 +301,14 @@ def map_sdk_message(msg: Any, acc: TurnAccumulator | None = None) -> list[dict[s
                         },
                     }
                 )
+                events.extend(
+                    _task_events_for_tool_start(
+                        session,
+                        tool_id=tool_id,
+                        name=name,
+                        input_data=input_data,
+                    )
+                )
             elif isinstance(block, ToolResultBlock):
                 # Rare on assistant; still map for robustness
                 tool_id = block.tool_use_id
@@ -196,6 +331,16 @@ def map_sdk_message(msg: Any, acc: TurnAccumulator | None = None) -> list[dict[s
                             "output_summary": _summarize(block.content),
                         },
                     }
+                )
+                events.extend(
+                    _task_events_for_tool_end(
+                        session,
+                        acc,
+                        tool_id=tool_id,
+                        name=name,
+                        output=block.content,
+                        is_error=block.is_error,
+                    )
                 )
         if msg.error:
             err = f"Assistant error: {msg.error}"
@@ -231,6 +376,16 @@ def map_sdk_message(msg: Any, acc: TurnAccumulator | None = None) -> list[dict[s
                             "output_summary": _summarize(block.content),
                         },
                     }
+                )
+                events.extend(
+                    _task_events_for_tool_end(
+                        session,
+                        acc,
+                        tool_id=tool_id,
+                        name=name,
+                        output=block.content,
+                        is_error=block.is_error,
+                    )
                 )
         return events
 
@@ -353,9 +508,19 @@ def set_session_status(session_id: str, status: str) -> dict[str, Any]:
     return session
 
 
-def finalize_turn(session_id: str, acc: TurnAccumulator) -> dict[str, Any]:
-    """Append assistant message (if any content/tools), save sdk_session_id, set idle."""
+def finalize_turn(
+    session_id: str,
+    acc: TurnAccumulator,
+    *,
+    live_session: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Append assistant message (if any content/tools), save sdk_session_id/tasks, set idle."""
     session = get_session(session_id)
+    # Merge task list mutated during the turn (live_session) into persisted record.
+    if live_session is not None and isinstance(live_session.get("tasks"), list):
+        session["tasks"] = live_session.get("tasks")
+    elif "tasks" not in session:
+        session["tasks"] = []
     text = acc.content_text()
     if text or acc.tools:
         messages = list(session.get("messages") or [])
@@ -394,11 +559,15 @@ async def run_agent_turn(
     # Persist user message first
     append_user_message(session, user_text)
     session = set_session_status(session_id, "running")
+    # Live mutable session for task list updates during the turn.
+    if not isinstance(session.get("tasks"), list):
+        session["tasks"] = []
 
     meta = {
         "session_id": session_id,
         "cwd": session.get("cwd"),
         "model": session.get("model"),
+        "tasks": list(session.get("tasks") or []),
     }
     yield format_sse("meta", meta)
 
@@ -420,7 +589,7 @@ async def run_agent_turn(
                             break
                     except Exception:
                         pass
-                for event in map_sdk_message(msg, acc):
+                for event in map_sdk_message(msg, acc, session=session):
                     if event["event"] == "done":
                         done_emitted = True
                     yield format_sse(event["event"], event["data"])
@@ -434,7 +603,7 @@ async def run_agent_turn(
         if client is not None:
             unregister_client(session_id, client)
         try:
-            finalize_turn(session_id, acc)
+            finalize_turn(session_id, acc, live_session=session)
         except Exception:
             # Last-resort: try mark idle without losing prior messages
             try:
@@ -448,6 +617,7 @@ async def run_agent_turn(
             {
                 "sdk_session_id": acc.sdk_session_id,
                 "usage": acc.usage,
+                "tasks": list(session.get("tasks") or []),
                 **(
                     {"total_cost_usd": acc.total_cost_usd}
                     if acc.total_cost_usd is not None

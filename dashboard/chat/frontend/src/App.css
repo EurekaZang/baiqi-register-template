@@ -801,6 +801,22 @@ textarea {
   min-height: 0;
 }
 
+.tasks-inline {
+  flex-shrink: 0;
+}
+
+.tasks-panel {
+  border-color: var(--border);
+}
+
+.tasks-panel .task-item:hover {
+  background: #f8fafc;
+}
+
+.tasks-progress {
+  background: #e2e8f0;
+}
+
 .message-list {
   max-width: 860px;
   margin: 0 auto;

@@ -104,6 +104,7 @@ export type SessionSummary = {
   status: string
   pinned?: boolean
   messages?: Message[]
+  tasks?: AgentTask[]
 }
 
 export type ToolCard = {
@@ -112,6 +113,26 @@ export type ToolCard = {
   input_summary?: string
   output_summary?: string
   ok?: boolean
+}
+
+export type AgentTaskStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'deleted'
+  | string
+
+export type AgentTask = {
+  id: string
+  subject?: string
+  description?: string | null
+  activeForm?: string | null
+  status?: AgentTaskStatus
+  metadata?: Record<string, unknown> | null
+  created_at?: string
+  updated_at?: string
+  source_tool_use_id?: string
+  provisional?: boolean
 }
 
 export type Message = {

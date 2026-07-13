@@ -37,9 +37,11 @@ export function ChatView({
   const [streaming, setStreaming] = useState<StreamState>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [seedText, setSeedText] = useState<string | undefined>(undefined)
   const abortRef = useRef<AbortController | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const loadedIdRef = useRef<string | null>(null)
+  const activeIdRef = useRef<string | null>(null)
 
   const isStreaming = !!streaming?.active
 
@@ -102,7 +104,7 @@ export function ChatView({
 
   async function handleSend(text: string) {
     setError(null)
-    let activeId = sessionId
+    let activeId = sessionId || activeIdRef.current
 
     try {
       if (draftMode || !activeId) {
@@ -115,10 +117,13 @@ export function ChatView({
           model: model || defaultModel,
         })
         activeId = created.id
+        activeIdRef.current = created.id
         loadedIdRef.current = created.id
         setSession(created)
         setMessages(created.messages || [])
         onSessionCreated(created)
+      } else {
+        activeIdRef.current = activeId
       }
 
       const userMsg: Message = {
@@ -224,14 +229,23 @@ export function ChatView({
 
   async function handleStop() {
     abortRef.current?.abort()
-    if (sessionId) {
+    const id = sessionId || activeIdRef.current || session?.id || null
+    if (id) {
       try {
-        await stopSession(sessionId)
+        await stopSession(id)
       } catch {
         /* ignore */
       }
     }
     setStreaming((prev) => (prev ? { ...prev, active: false } : null))
+  }
+
+  function handleSuggestion(text: string) {
+    if (!cwd.trim() && (draftMode || !sessionId)) {
+      setError('Working directory (cwd) is required')
+      return
+    }
+    setSeedText(text)
   }
 
   const headerCwd = draftMode ? cwd : session?.cwd || cwd
@@ -272,7 +286,13 @@ export function ChatView({
         {loading ? (
           <div className="muted pad-sm">Loading…</div>
         ) : (
-          <MessageList messages={messages} streaming={streaming} />
+          <MessageList
+            messages={messages}
+            streaming={streaming}
+            onSuggestion={
+              isStreaming || loading ? undefined : handleSuggestion
+            }
+          />
         )}
       </div>
 
@@ -281,10 +301,19 @@ export function ChatView({
         streaming={isStreaming}
         onSend={handleSend}
         onStop={() => void handleStop()}
+        seedText={seedText}
+        onSeedConsumed={() => setSeedText(undefined)}
+        hint={
+          draftMode && !cwd.trim()
+            ? 'Set an absolute cwd above before starting.'
+            : running
+              ? 'Agent is running in Full auto mode.'
+              : undefined
+        }
         placeholder={
           draftMode
             ? cwd.trim()
-              ? 'Start a new chat…'
+              ? 'Describe a coding task…'
               : 'Set cwd above, then message…'
             : 'Message the agent…'
         }

@@ -102,6 +102,7 @@ export type SessionSummary = {
   created_at: string
   updated_at: string
   status: string
+  pinned?: boolean
   messages?: Message[]
 }
 
@@ -178,7 +179,7 @@ export async function deleteSession(id: string): Promise<void> {
 
 export async function patchSession(
   id: string,
-  body: { title?: string; cwd?: string; model?: string },
+  body: { title?: string; cwd?: string; model?: string; pinned?: boolean },
 ): Promise<SessionSummary> {
   return apiFetch<SessionSummary>(`/sessions/${id}`, {
     method: 'PATCH',

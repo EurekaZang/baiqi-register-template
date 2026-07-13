@@ -1,4 +1,6 @@
-/* Global reset; theme lives in App.css */
+@import "tailwindcss";
+
+/* Keep existing App.css theme; Tailwind utilities compose on top. */
 *,
 *::before,
 *::after {

@@ -158,6 +158,7 @@ def create_session(*, cwd: str, title: str | None = None, model: str | None = No
         "created_at": now,
         "updated_at": now,
         "status": "idle",
+        "pinned": False,
         "messages": [],
     }
     save_session(session)
@@ -187,6 +188,7 @@ def update_session(
     title: str | None = None,
     cwd: str | None = None,
     model: str | None = None,
+    pinned: bool | None = None,
 ) -> dict[str, Any]:
     session = get_session(session_id)
     if session.get("status") == "running" and (cwd is not None or model is not None):
@@ -207,6 +209,11 @@ def update_session(
     if model is not None:
         session["model"] = model
         changed = True
+    if pinned is not None:
+        session["pinned"] = bool(pinned)
+        changed = True
+    elif "pinned" not in session:
+        session["pinned"] = False
 
     if changed:
         session["updated_at"] = _now_iso()
@@ -224,11 +231,33 @@ class PatchSessionRequest(BaseModel):
     title: str | None = None
     cwd: str | None = None
     model: str | None = None
+    pinned: bool | None = None
 
 
 @router.get("/api/sessions")
 def api_list_sessions() -> list[dict[str, Any]]:
-    return list_sessions()
+    sessions = list_sessions()
+    # Normalize legacy sessions missing pinned; sort pinned first then updated_at.
+    for s in sessions:
+        if "pinned" not in s:
+            s["pinned"] = False
+    sessions.sort(
+        key=lambda s: (
+            0 if s.get("pinned") else 1,
+            -(
+                _sort_ts(s.get("updated_at") or s.get("created_at") or "")
+            ),
+        )
+    )
+    return sessions
+
+
+def _sort_ts(raw: str) -> float:
+    try:
+        # Accept ISO timestamps; fallback 0.
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return 0.0
 
 
 @router.post("/api/sessions")
@@ -238,19 +267,23 @@ def api_create_session(payload: CreateSessionRequest) -> dict[str, Any]:
 
 @router.get("/api/sessions/{session_id}")
 def api_get_session(session_id: str) -> dict[str, Any]:
-    return get_session(session_id)
+    session = get_session(session_id)
+    if "pinned" not in session:
+        session["pinned"] = False
+    return session
 
 
 @router.patch("/api/sessions/{session_id}")
 def api_patch_session(session_id: str, payload: PatchSessionRequest) -> dict[str, Any]:
     data = payload.model_dump(exclude_unset=True)
     if not data:
-        return get_session(session_id)
+        return api_get_session(session_id)
     return update_session(
         session_id,
         title=data.get("title"),
         cwd=data.get("cwd"),
         model=data.get("model"),
+        pinned=data.get("pinned"),
     )
 
 

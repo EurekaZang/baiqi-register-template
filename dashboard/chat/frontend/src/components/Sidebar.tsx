@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
+import { LogOut, Pin, PinOff, Pencil, Trash2 } from 'lucide-react'
 import type { SessionSummary } from '../api'
 import { groupSessionsByDay } from '../lib/content'
+import { Button } from './ui/button'
+import { Input } from './ui/input'
 
 type Props = {
   sessions: SessionSummary[]
@@ -9,6 +12,7 @@ type Props = {
   onNew: () => void
   onDelete: (id: string) => void
   onRename: (id: string, title: string) => void
+  onTogglePin: (id: string, pinned: boolean) => void
   onLogout: () => void
 }
 
@@ -36,6 +40,7 @@ export function Sidebar({
   onNew,
   onDelete,
   onRename,
+  onTogglePin,
   onLogout,
 }: Props) {
   const [query, setQuery] = useState('')
@@ -79,12 +84,12 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-top">
-        <button type="button" className="btn primary block" onClick={onNew}>
+        <Button className="w-full" onClick={onNew}>
           + New chat
-        </button>
+        </Button>
         <label className="sidebar-search">
           <span className="sr-only">Search sessions</span>
-          <input
+          <Input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -106,7 +111,7 @@ export function Sidebar({
             {g.items.map((s) => (
               <div
                 key={s.id}
-                className={`session-item ${s.id === activeId ? 'active' : ''}`}
+                className={`session-item ${s.id === activeId ? 'active' : ''} ${s.pinned ? 'pinned' : ''}`}
                 onClick={() => onSelect(s.id)}
                 role="button"
                 tabIndex={0}
@@ -115,8 +120,8 @@ export function Sidebar({
                 }}
               >
                 {editingId === s.id ? (
-                  <input
-                    className="session-rename-input"
+                  <Input
+                    className="session-rename-input h-8"
                     value={draftTitle}
                     autoFocus
                     onClick={(e) => e.stopPropagation()}
@@ -129,7 +134,10 @@ export function Sidebar({
                     }}
                   />
                 ) : (
-                  <div className="session-title">{shortTitle(s)}</div>
+                  <div className="session-title">
+                    {s.pinned ? <Pin className="session-pin-icon" /> : null}
+                    {shortTitle(s)}
+                  </div>
                 )}
                 <div className="session-meta muted">
                   <span className="status-dot" data-status={s.status} />
@@ -137,28 +145,43 @@ export function Sidebar({
                   {s.cwd ? <span className="session-cwd">{shortCwd(s.cwd)}</span> : null}
                 </div>
                 <div className="session-actions">
-                  <button
-                    type="button"
-                    className="btn ghost icon-btn"
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title={s.pinned ? 'Unpin' : 'Pin'}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onTogglePin(s.id, !s.pinned)
+                    }}
+                  >
+                    {s.pinned ? (
+                      <PinOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Pin className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     title="Rename"
                     onClick={(e) => {
                       e.stopPropagation()
                       startRename(s)
                     }}
                   >
-                    ✎
-                  </button>
-                  <button
-                    type="button"
-                    className="btn ghost icon-btn delete-btn"
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     title="Delete"
                     onClick={(e) => {
                       e.stopPropagation()
                       onDelete(s.id)
                     }}
                   >
-                    ×
-                  </button>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </div>
             ))}
@@ -169,10 +192,14 @@ export function Sidebar({
       <div className="sidebar-footer">
         <div className="sidebar-footer-meta muted">
           {sessions.length} chat{sessions.length === 1 ? '' : 's'}
+          {sessions.some((s) => s.pinned)
+            ? ` · ${sessions.filter((s) => s.pinned).length} pinned`
+            : ''}
         </div>
-        <button type="button" className="btn ghost block" onClick={onLogout}>
+        <Button variant="ghost" className="w-full justify-start" onClick={onLogout}>
+          <LogOut className="mr-2 h-4 w-4" />
           Log out
-        </button>
+        </Button>
       </div>
     </aside>
   )

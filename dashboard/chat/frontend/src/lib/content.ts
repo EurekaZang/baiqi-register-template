@@ -35,6 +35,21 @@ export type Artifact = {
   language: string
   code: string
   title: string
+  previewable: boolean
+}
+
+function isPreviewable(language: string, code: string): boolean {
+  const lang = language.toLowerCase()
+  if (['html', 'htm', 'svg'].includes(lang)) return true
+  if (['jsx', 'tsx', 'react'].includes(lang)) return true
+  // bare HTML document heuristic
+  if (lang === 'text' || lang === '') {
+    const head = code.slice(0, 200).toLowerCase()
+    if (head.includes('<html') || head.includes('<!doctype html') || head.includes('<svg')) {
+      return true
+    }
+  }
+  return false
 }
 
 /** Collect fenced code blocks suitable for artifacts panel. */
@@ -61,14 +76,57 @@ export function extractArtifacts(
       language: language || 'text',
       code,
       title: language ? `${language} snippet` : `code ${i}`,
+      previewable: isPreviewable(language || 'text', code),
     })
   }
   return arts
 }
 
-export function groupSessionsByDay<T extends { updated_at?: string; created_at?: string }>(
+export function buildPreviewHtml(artifact: Artifact): string {
+  const lang = artifact.language.toLowerCase()
+  const code = artifact.code
+  if (['html', 'htm'].includes(lang) || code.trim().toLowerCase().startsWith('<!doctype')) {
+    return code
+  }
+  if (lang === 'svg' || code.trim().startsWith('<svg')) {
+    return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:16px;background:#fff;}</style></head><body>${code}</body></html>`
+  }
+  if (['jsx', 'tsx', 'react'].includes(lang)) {
+    // Lightweight static preview: show source in a framed document with a note.
+    // Avoid executing arbitrary JS for safety.
+    const escaped = code
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+    return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body{margin:0;font-family:ui-sans-serif,system-ui,sans-serif;background:#f8fafc;color:#0f172a}
+    .banner{padding:10px 14px;background:#e0f2fe;border-bottom:1px solid #bae6fd;font-size:12px;color:#0369a1}
+    pre{margin:0;padding:16px;overflow:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre}
+  </style>
+</head>
+<body>
+  <div class="banner">React/JSX preview is sandboxed as source view (no runtime eval).</div>
+  <pre>${escaped}</pre>
+</body>
+</html>`
+  }
+  const escaped = code
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  return `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#0f172a;color:#e2e8f0;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace}pre{margin:0;padding:16px;white-space:pre-wrap}</style></head><body><pre>${escaped}</pre></body></html>`
+}
+
+export function groupSessionsByDay<T extends { updated_at?: string; created_at?: string; pinned?: boolean }>(
   sessions: T[],
 ): { label: string; items: T[] }[] {
+  const pinned = sessions.filter((s) => !!s.pinned)
+  const rest = sessions.filter((s) => !s.pinned)
+
   const now = new Date()
   const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const startYesterday = startToday - 86400000
@@ -81,7 +139,7 @@ export function groupSessionsByDay<T extends { updated_at?: string; created_at?:
     Earlier: [],
   }
 
-  for (const s of sessions) {
+  for (const s of rest) {
     const raw = s.updated_at || s.created_at || ''
     const t = Date.parse(raw)
     if (Number.isNaN(t)) {
@@ -97,7 +155,10 @@ export function groupSessionsByDay<T extends { updated_at?: string; created_at?:
     }
   }
 
-  return Object.entries(buckets)
-    .filter(([, items]) => items.length > 0)
-    .map(([label, items]) => ({ label, items }))
+  const groups: { label: string; items: T[] }[] = []
+  if (pinned.length) groups.push({ label: 'Pinned', items: pinned })
+  for (const [label, items] of Object.entries(buckets)) {
+    if (items.length) groups.push({ label, items })
+  }
+  return groups
 }

@@ -90,6 +90,23 @@ export default function App() {
     }
   }
 
+  async function handleTogglePin(id: string, pinned: boolean) {
+    try {
+      const updated = await patchSession(id, { pinned })
+      setSessions((prev) => {
+        const next = prev.map((s) => (s.id === id ? { ...s, ...updated } : s))
+        return next.sort((a, b) => {
+          const ap = a.pinned ? 0 : 1
+          const bp = b.pinned ? 0 : 1
+          if (ap !== bp) return ap - bp
+          return (b.updated_at || '').localeCompare(a.updated_at || '')
+        })
+      })
+    } catch {
+      /* ignore pin failure */
+    }
+  }
+
   function handleSessionCreated(session: SessionSummary) {
     setActiveId(session.id)
     setDraftMode(false)
@@ -129,6 +146,7 @@ export default function App() {
         onNew={handleNew}
         onDelete={(id) => void handleDelete(id)}
         onRename={(id, title) => void handleRename(id, title)}
+        onTogglePin={(id, pinned) => void handleTogglePin(id, pinned)}
         onLogout={handleLogout}
       />
       <ChatView

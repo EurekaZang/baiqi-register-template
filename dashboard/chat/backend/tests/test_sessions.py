@@ -66,6 +66,7 @@ def test_create_defaults_model_to_grok(monkeypatch, tmp_path):
     assert body["status"] == "idle"
     assert body["sdk_session_id"] is None
     assert body["messages"] == []
+    assert body["pinned"] is False
     assert "id" in body
     assert "created_at" in body
     assert "updated_at" in body
@@ -110,8 +111,17 @@ def test_list_get_patch_delete(monkeypatch, tmp_path):
     assert patched.status_code == 200
     assert patched.json()["title"] == "Renamed"
 
+    pinned = c.patch(
+        f"/api/sessions/{sid}",
+        headers=_auth_headers(),
+        json={"pinned": True},
+    )
+    assert pinned.status_code == 200
+    assert pinned.json()["pinned"] is True
+
     got2 = c.get(f"/api/sessions/{sid}", headers=_auth_headers())
     assert got2.json()["title"] == "Renamed"
+    assert got2.json()["pinned"] is True
 
     deleted = c.delete(f"/api/sessions/{sid}", headers=_auth_headers())
     assert deleted.status_code == 200
@@ -221,3 +231,24 @@ def test_sessions_routes_require_auth(monkeypatch, tmp_path):
     assert c.get("/api/sessions/x").status_code == 401
     assert c.patch("/api/sessions/x", json={"title": "t"}).status_code == 401
     assert c.delete("/api/sessions/x").status_code == 401
+
+
+def test_pinned_sessions_sort_first(monkeypatch, tmp_path):
+    c = _client(monkeypatch, tmp_path)
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    a.mkdir()
+    b.mkdir()
+
+    s1 = c.post("/api/sessions", headers=_auth_headers(), json={"cwd": str(a), "title": "Old"}).json()
+    s2 = c.post("/api/sessions", headers=_auth_headers(), json={"cwd": str(b), "title": "New"}).json()
+
+    # pin older session
+    r = c.patch(f"/api/sessions/{s1['id']}", headers=_auth_headers(), json={"pinned": True})
+    assert r.status_code == 200
+    assert r.json()["pinned"] is True
+
+    listed = c.get("/api/sessions", headers=_auth_headers()).json()
+    assert listed[0]["id"] == s1["id"]
+    assert listed[0]["pinned"] is True
+    assert listed[1]["id"] == s2["id"]

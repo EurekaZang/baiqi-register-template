@@ -1,6 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Response
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 from .agent_bridge import router as agent_router
 from .auth import LoginRequest, login
@@ -24,11 +25,37 @@ def auth_login(payload: LoginRequest, response: Response):
     return login(payload, response)
 
 
-# SPA static assets + catch-all (must be after API routes)
+def _safe_dist_file(rel: str) -> Path | None:
+    """Resolve a file under frontend dist; None if missing or path-escape."""
+    if not rel or rel.startswith("/") or "\\" in rel:
+        return None
+    parts = [p for p in rel.split("/") if p not in ("", ".")]
+    if not parts or any(p == ".." for p in parts):
+        return None
+    root = settings.frontend_dist.resolve()
+    candidate = root.joinpath(*parts).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
+
+
+# SPA static assets + catch-all (must be after API routes).
+# Note: Starlette 1.3 StaticFiles+Mount can 404 hashed assets (absolute path
+# after get_route_path); serve dist files explicitly instead.
 if settings.frontend_dist.exists():
-    assets = settings.frontend_dist / "assets"
-    if assets.exists():
-        app.mount("/assets", StaticFiles(directory=str(assets)), name="assets")
+
+    @app.get("/assets/{file_path:path}")
+    def spa_assets(file_path: str):
+        fp = _safe_dist_file(f"assets/{file_path}")
+        if fp is None:
+            return Response(
+                content='{"error":"not found"}',
+                status_code=404,
+                media_type="application/json",
+            )
+        return FileResponse(fp)
 
     @app.get("/")
     def spa_root():
@@ -45,12 +72,8 @@ if settings.frontend_dist.exists():
                 media_type="application/json",
             )
         # Prefer real files under dist (favicon, etc.)
-        candidate = settings.frontend_dist / full_path
-        if (
-            full_path
-            and candidate.is_file()
-            and candidate.resolve().is_relative_to(settings.frontend_dist.resolve())
-        ):
-            return FileResponse(candidate)
+        fp = _safe_dist_file(full_path)
+        if fp is not None:
+            return FileResponse(fp)
         index = settings.frontend_dist / "index.html"
         return FileResponse(index)

@@ -15,10 +15,12 @@ Usage:
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import re
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -39,6 +41,27 @@ PORT = int(os.getenv("DASHBOARD_PORT", "8090"))
 GROKCLI_URL = os.getenv("GROKCLI_API_URL", "http://127.0.0.1:3000").rstrip("/")
 GROKCLI_PASSWORD = os.getenv("GROKCLI_ADMIN_PASSWORD", "grokcli-admin-2026")
 YESCAPTCHA_KEY = os.getenv("YESCAPTCHA_KEY", "").strip()
+# Loopback FastAPI chat-service (public browser paths are /chat/*; strip prefix).
+CHAT_UPSTREAM = os.getenv("CHAT_UPSTREAM", "http://127.0.0.1:8091").rstrip("/")
+_CHAT_UPSTREAM_PARSED = urlparse(CHAT_UPSTREAM if "://" in CHAT_UPSTREAM else f"http://{CHAT_UPSTREAM}")
+CHAT_UPSTREAM_HOST = _CHAT_UPSTREAM_PARSED.hostname or "127.0.0.1"
+CHAT_UPSTREAM_PORT = _CHAT_UPSTREAM_PARSED.port or (
+    443 if (_CHAT_UPSTREAM_PARSED.scheme or "http") == "https" else 80
+)
+CHAT_PROXY_TIMEOUT = float(os.getenv("CHAT_PROXY_TIMEOUT", "3600"))
+# True hop-by-hop headers (RFC 7230). Do NOT include content-length here —
+# clients need it (or Transfer-Encoding: chunked) to finish keep-alive responses.
+_HOP_BY_HOP_HEADERS = {
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailers",
+    "transfer-encoding",
+    "upgrade",
+    "host",
+}
 
 # Usage time-series: sample free-usage tokens (actual/limit) + commercial USD equiv.
 DASH_DIR = Path(__file__).resolve().parent
@@ -1863,10 +1886,198 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return {}
 
+    @staticmethod
+    def _is_chat_path(path: str) -> bool:
+        return path == "/chat" or path.startswith("/chat/")
+
+    def _chat_upstream_request_target(self) -> str:
+        """Map public /chat/* to loopback path without the /chat prefix."""
+        parsed = urlparse(self.path)
+        p = parsed.path or "/"
+        if p == "/chat" or p == "/chat/":
+            upstream_path = "/"
+        elif p.startswith("/chat/"):
+            upstream_path = p[len("/chat") :] or "/"
+        else:
+            upstream_path = p
+        if parsed.query:
+            return f"{upstream_path}?{parsed.query}"
+        return upstream_path
+
+    def _chat_is_api_request(self) -> bool:
+        p = urlparse(self.path).path or "/"
+        if p == "/chat" or p == "/chat/":
+            return False
+        if p.startswith("/chat/"):
+            rest = p[len("/chat") :]
+        else:
+            rest = p
+        return rest == "/api" or rest.startswith("/api/")
+
+    def _proxy_chat_offline(self) -> None:
+        if self._chat_is_api_request() or self.command != "GET":
+            self._json(
+                502,
+                {
+                    "error": "chat backend offline",
+                    "upstream": CHAT_UPSTREAM,
+                },
+            )
+            return
+        body = (
+            "<!doctype html><html><head><meta charset=utf-8>"
+            "<title>Chat offline</title></head>"
+            "<body style='font-family:system-ui,sans-serif;padding:2rem;"
+            "background:#0b1220;color:#e2e8f0'>"
+            "<h1>Chat backend offline</h1>"
+            f"<p>The chat service at <code>{CHAT_UPSTREAM}</code> is not reachable.</p>"
+            "<p>Start it with <code>scripts/start_chat_service.sh</code>, then reload.</p>"
+            "<p><a href='/' style='color:#7dd3fc'>&larr; Back to dashboard</a></p>"
+            "</body></html>"
+        ).encode()
+        try:
+            self.send_response(502)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            return
+
+    def _proxy_chat(self) -> None:
+        """Reverse-proxy /chat → loopback chat-service, stripping the /chat prefix.
+
+        Streams response body in chunks so SSE (agent turns) is not buffered.
+        Forwards Authorization and Cookie; rewrites Host to the upstream.
+        When upstream has no Content-Length (chunked / SSE), re-frames as
+        Transfer-Encoding: chunked so HTTP/1.1 clients do not hang on keep-alive.
+        """
+        target = self._chat_upstream_request_target()
+        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length) if length > 0 else None
+
+        out_headers: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for key, value in self.headers.items():
+            lk = key.lower()
+            if lk in _HOP_BY_HOP_HEADERS:
+                continue
+            if lk == "accept-encoding":
+                continue
+            out_headers.append((key, value))
+            seen.add(lk)
+        out_headers.append(("Host", f"{CHAT_UPSTREAM_HOST}:{CHAT_UPSTREAM_PORT}"))
+        # Prefer identity encoding so we can stream transparently.
+        out_headers.append(("Accept-Encoding", "identity"))
+        # Single Content-Length only (duplicate CL → uvicorn "Invalid HTTP request").
+        if body is not None:
+            out_headers = [(k, v) for k, v in out_headers if k.lower() != "content-length"]
+            out_headers.append(("Content-Length", str(len(body))))
+        elif "content-length" not in seen:
+            # Explicit zero for methods that may carry a body.
+            if self.command in {"POST", "PUT", "PATCH", "DELETE"}:
+                out_headers.append(("Content-Length", "0"))
+
+        conn: http.client.HTTPConnection | None = None
+        try:
+            conn = http.client.HTTPConnection(
+                CHAT_UPSTREAM_HOST,
+                CHAT_UPSTREAM_PORT,
+                timeout=CHAT_PROXY_TIMEOUT,
+            )
+            conn.putrequest(self.command, target, skip_host=True, skip_accept_encoding=True)
+            for key, value in out_headers:
+                conn.putheader(key, value)
+            # endheaders(message_body=...) can mishandle framing; send body after.
+            conn.endheaders()
+            if body:
+                conn.send(body)
+            upstream = conn.getresponse()
+        except (OSError, socket.timeout, http.client.HTTPException) as exc:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            sys.stderr.write(f"chat proxy upstream error: {exc}\n")
+            self._proxy_chat_offline()
+            return
+
+        try:
+            cl_hdr = upstream.getheader("Content-Length")
+            ctype = (upstream.getheader("Content-Type") or "").lower()
+            is_sse = "text/event-stream" in ctype
+            # Known length → pass through; otherwise re-chunk so keep-alive is safe.
+            use_chunked = cl_hdr is None
+            try:
+                self.send_response(upstream.status)
+                for key, value in upstream.getheaders():
+                    lk = key.lower()
+                    if lk in _HOP_BY_HOP_HEADERS:
+                        continue
+                    if lk == "content-length":
+                        if not use_chunked:
+                            self.send_header(key, value)
+                        continue
+                    self.send_header(key, value)
+                if use_chunked:
+                    self.send_header("Transfer-Encoding", "chunked")
+                if is_sse:
+                    self.send_header("Cache-Control", "no-cache, no-store")
+                    self.send_header("X-Accel-Buffering", "no")
+                self.end_headers()
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                return
+
+            try:
+                # read1 prefers whatever is already buffered (better for SSE)
+                read_chunk = getattr(upstream, "read1", None)
+
+                def _next_chunk() -> bytes:
+                    if read_chunk is not None:
+                        return read_chunk(8192)
+                    return upstream.read(8192)
+
+                if use_chunked:
+                    while True:
+                        chunk = _next_chunk()
+                        if not chunk:
+                            break
+                        self.wfile.write(b"%X\r\n" % len(chunk))
+                        self.wfile.write(chunk)
+                        self.wfile.write(b"\r\n")
+                        self.wfile.flush()
+                    self.wfile.write(b"0\r\n\r\n")
+                    self.wfile.flush()
+                else:
+                    remaining = int(cl_hdr)
+                    while remaining > 0:
+                        chunk = upstream.read(min(8192, remaining))
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                return
+        finally:
+            try:
+                upstream.close()
+            except Exception:
+                pass
+            try:
+                conn.close()
+            except Exception:
+                pass
+
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         qs = parse_qs(parsed.query or "")
+        if self._is_chat_path(path):
+            self._proxy_chat()
+            return
         if path in {"/", "/index.html"}:
             self._html()
             return
@@ -1905,6 +2116,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path.rstrip("/") or "/"
+        if self._is_chat_path(path):
+            self._proxy_chat()
+            return
         body = self._read_json()
         if path == "/api/register/start":
             count = body.get("count", 1)
@@ -1917,6 +2131,27 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/services/refresh":
             self._json(200, api_services())
+            return
+        self._json(404, {"error": "not found", "path": path})
+
+    def do_PUT(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        if self._is_chat_path(path):
+            self._proxy_chat()
+            return
+        self._json(404, {"error": "not found", "path": path})
+
+    def do_PATCH(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        if self._is_chat_path(path):
+            self._proxy_chat()
+            return
+        self._json(404, {"error": "not found", "path": path})
+
+    def do_DELETE(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        if self._is_chat_path(path):
+            self._proxy_chat()
             return
         self._json(404, {"error": "not found", "path": path})
 
@@ -1957,6 +2192,8 @@ def main() -> int:
     print(f"Grok Dashboard → http://{HOST}:{PORT}")
     print(f"  ROOT={ROOT}")
     print(f"  GROKCLI={GROKCLI_URL}")
+    print(f"  CHAT proxy /chat → {CHAT_UPSTREAM} (timeout={CHAT_PROXY_TIMEOUT}s)")
+    print(f"  bind override: DASHBOARD_HOST=0.0.0.0 for LAN")
     print(
         f"  USAGE sample={USAGE_SAMPLE_INTERVAL}s "
         f"price=${GROK_USD_PER_MTOKENS}/Mtok history={USAGE_HISTORY_PATH}"

@@ -5,6 +5,9 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react'
+import { CornerDownLeft, Square } from 'lucide-react'
+import { Button } from './ui/button'
+import { Textarea } from './ui/textarea'
 
 type Props = {
   disabled?: boolean
@@ -35,7 +38,6 @@ export function Composer({
     if (seedText == null) return
     setText(seedText)
     onSeedConsumed?.()
-    // focus after paint
     requestAnimationFrame(() => {
       const el = taRef.current
       if (!el) return
@@ -76,7 +78,7 @@ export function Composer({
       {hint ? <div className="composer-hint muted">{hint}</div> : null}
       <form className="composer" onSubmit={onSubmit}>
         <div className="composer-main">
-          <textarea
+          <Textarea
             ref={taRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -84,22 +86,26 @@ export function Composer({
             placeholder={placeholder}
             rows={1}
             disabled={disabled}
+            className="composer-textarea min-h-[44px] max-h-[200px] resize-none border-0 bg-transparent px-1 py-1 shadow-none focus-visible:ring-0"
           />
           <div className="composer-toolbar">
-            <span className="composer-hotkey muted">Enter send · Shift+Enter newline</span>
+            <span className="composer-hotkey muted">
+              Enter send · Shift+Enter newline
+            </span>
             <div className="composer-actions">
               {streaming ? (
-                <button type="button" className="btn danger" onClick={onStop}>
+                <Button type="button" variant="danger" onClick={onStop}>
+                  <Square className="h-3.5 w-3.5 fill-current" />
                   Stop
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
                   type="submit"
-                  className="btn primary"
                   disabled={disabled || !text.trim()}
                 >
                   Send
-                </button>
+                  <CornerDownLeft className="h-3.5 w-3.5 opacity-80" />
+                </Button>
               )}
             </div>
           </div>

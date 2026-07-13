@@ -968,8 +968,17 @@ textarea {
 
 .msg-action-btn {
   font-size: 12px;
-  padding: 0.2rem 0.55rem;
   min-height: 28px;
+  color: var(--muted);
+}
+
+.msg-action-btn:hover {
+  color: var(--text);
+  background: #f1f5f9;
+}
+
+.composer-textarea {
+  field-sizing: content;
 }
 
 .user-text {

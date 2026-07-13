@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
+import { Boxes, Copy, RotateCcw } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Message, ToolCard } from '../api'
 import { extractArtifacts, extractReasoning, type Artifact } from '../lib/content'
 import { ReasoningBlock } from './ReasoningBlock'
 import { ToolCardView } from './ToolCard'
+import { Button } from './ui/button'
 
 export type StreamState = {
   text: string
@@ -82,9 +84,11 @@ function MessageActions({
   return (
     <div className="msg-actions">
       {content.trim() ? (
-        <button
+        <Button
           type="button"
-          className="btn ghost msg-action-btn"
+          variant="ghost"
+          size="sm"
+          className="msg-action-btn h-7 px-2 text-xs"
           onClick={() => {
             void copyText(content).then((ok) => {
               if (!ok) return
@@ -93,22 +97,33 @@ function MessageActions({
             })
           }}
         >
+          <Copy className="h-3.5 w-3.5" />
           {copied ? 'Copied' : 'Copy'}
-        </button>
+        </Button>
       ) : null}
       {onRetry ? (
-        <button type="button" className="btn ghost msg-action-btn" onClick={onRetry}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="msg-action-btn h-7 px-2 text-xs"
+          onClick={onRetry}
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
           Retry
-        </button>
+        </Button>
       ) : null}
       {artifacts && artifacts.length > 0 && onOpenArtifact ? (
-        <button
+        <Button
           type="button"
-          className="btn ghost msg-action-btn"
+          variant="ghost"
+          size="sm"
+          className="msg-action-btn h-7 px-2 text-xs"
           onClick={() => onOpenArtifact(artifacts[artifacts.length - 1])}
         >
+          <Boxes className="h-3.5 w-3.5" />
           Artifacts ({artifacts.length})
-        </button>
+        </Button>
       ) : null}
     </div>
   )

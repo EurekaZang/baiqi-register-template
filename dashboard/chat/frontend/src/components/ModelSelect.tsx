@@ -105,6 +105,10 @@ export function ModelSelect({ value, onChange, disabled, compact }: Props) {
       id: currentId,
       display_name: currentId,
     }
+  const currentTag = contextTag(current.id)
+  const currentTitle = currentTag
+    ? `${displayLabel(current)} [${currentTag}]`
+    : displayLabel(current)
 
   return (
     <div
@@ -118,7 +122,7 @@ export function ModelSelect({ value, onChange, disabled, compact }: Props) {
           ? `Models: ${error}`
           : stale
             ? 'Stale model list'
-            : displayLabel(current)
+            : currentTitle
       }
     >
       <Select
@@ -131,9 +135,8 @@ export function ModelSelect({ value, onChange, disabled, compact }: Props) {
         <SelectTrigger
           size="sm"
           className={cn(
-            'model-select-trigger h-8 min-w-[168px] max-w-[240px] gap-1.5 rounded-full border-slate-200 bg-white px-2.5 shadow-sm',
+            'model-select-trigger h-8 min-w-[168px] max-w-[260px] gap-1.5 rounded-full border-slate-200 bg-white px-2.5 shadow-sm',
             'text-xs font-medium text-slate-800',
-            disabled && 'opacity-60',
           )}
           aria-label="Model"
         >
@@ -141,27 +144,45 @@ export function ModelSelect({ value, onChange, disabled, compact }: Props) {
             <span className="flex min-w-0 items-center gap-1.5">
               <ModelLogo vendor={vendorOf(current.id)} />
               <span className="truncate">{displayLabel(current)}</span>
-              {stale ? (
-                <span
-                  className="ml-0.5 size-1.5 shrink-0 rounded-full bg-amber-500"
-                  title="Stale model list"
-                />
+              {currentTag ? (
+                <span className="shrink-0 rounded bg-slate-100 px-1 py-px font-mono text-[10px] font-normal text-slate-500">
+                  {currentTag}
+                </span>
               ) : null}
             </span>
           </SelectValue>
+          {stale ? (
+            <span
+              className="size-1.5 shrink-0 rounded-full bg-amber-500"
+              title="Stale model list"
+              aria-hidden
+            />
+          ) : null}
         </SelectTrigger>
         <SelectContent
           align="end"
+          alignItemWithTrigger={false}
           className="model-select-content min-w-[260px] max-w-[320px]"
         >
           {groups.map((g) => (
             <SelectGroup key={g.vendor}>
               <SelectLabel>{g.label}</SelectLabel>
-              {g.items.map((m) => (
-                <SelectItem key={m.id} value={m.id} className="text-xs">
-                  <ModelOptionRow model={m} />
-                </SelectItem>
-              ))}
+              {g.items.map((m) => {
+                const tag = contextTag(m.id)
+                const itemLabel = tag
+                  ? `${displayLabel(m)} ${tag}`
+                  : displayLabel(m)
+                return (
+                  <SelectItem
+                    key={m.id}
+                    value={m.id}
+                    label={itemLabel}
+                    className="text-xs"
+                  >
+                    <ModelOptionRow model={m} />
+                  </SelectItem>
+                )
+              })}
             </SelectGroup>
           ))}
         </SelectContent>

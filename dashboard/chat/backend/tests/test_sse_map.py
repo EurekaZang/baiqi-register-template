@@ -7,13 +7,19 @@ import json
 from claude_agent_sdk import (
     AssistantMessage,
     ResultMessage,
+    StreamEvent,
     TextBlock,
     ToolResultBlock,
     ToolUseBlock,
     UserMessage,
 )
 
-from app.agent_bridge import TurnAccumulator, map_exception, map_sdk_message
+from app.agent_bridge import (
+    TurnAccumulator,
+    build_options,
+    map_exception,
+    map_sdk_message,
+)
 from app.sse import format_sse, sse_dict
 
 
@@ -40,6 +46,83 @@ def test_map_assistant_text_block():
     assert events[0]["event"] == "text_delta"
     assert events[0]["data"] == {"text": "Hello"}
     assert acc.content_text() == "Hello"
+
+
+def test_map_stream_event_text_delta():
+    acc = TurnAccumulator()
+    partial = StreamEvent(
+        uuid="u1",
+        session_id="sdk-s1",
+        event={
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "text_delta", "text": "Hel"},
+        },
+    )
+    events = map_sdk_message(partial, acc)
+    assert events == [{"event": "text_delta", "data": {"text": "Hel"}}]
+    assert acc.content_text() == "Hel"
+    assert acc.streamed_via_partial is True
+    assert acc.sdk_session_id == "sdk-s1"
+
+    # Thinking / non-text deltas must not pollute assistant content.
+    thinking = StreamEvent(
+        uuid="u2",
+        session_id="sdk-s1",
+        event={
+            "type": "content_block_delta",
+            "index": 1,
+            "delta": {"type": "thinking_delta", "thinking": "hmm"},
+        },
+    )
+    assert map_sdk_message(thinking, acc) == []
+    assert acc.content_text() == "Hel"
+
+
+def test_final_assistant_text_skipped_after_partial_stream():
+    acc = TurnAccumulator()
+    map_sdk_message(
+        StreamEvent(
+            uuid="u1",
+            session_id="sdk-s1",
+            event={
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": "Hi"},
+            },
+        ),
+        acc,
+    )
+    map_sdk_message(
+        StreamEvent(
+            uuid="u2",
+            session_id="sdk-s1",
+            event={
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": "!"},
+            },
+        ),
+        acc,
+    )
+    # Final AssistantMessage repeats full text; must not double-emit or double-store.
+    final = AssistantMessage(content=[TextBlock(text="Hi!")], model="grok-4.5")
+    events = map_sdk_message(final, acc)
+    assert events == []
+    assert acc.content_text() == "Hi!"
+    # Flag resets so a later assistant message (after tools) can still stream.
+    assert acc.streamed_via_partial is False
+
+
+def test_build_options_enables_partial_messages():
+    opts = build_options(
+        {
+            "cwd": "/tmp",
+            "model": "grok-4.5",
+            "sdk_session_id": None,
+        }
+    )
+    assert opts.include_partial_messages is True
 
 
 def test_map_assistant_multiple_text_blocks():

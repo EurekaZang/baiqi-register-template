@@ -15,6 +15,7 @@ from claude_agent_sdk import (
     ClaudeSDKClient,
     ClaudeSDKError,
     ResultMessage,
+    StreamEvent,
     TextBlock,
     ToolResultBlock,
     ToolUseBlock,
@@ -96,10 +97,15 @@ class TurnAccumulator:
     usage: dict[str, Any] | None = None
     total_cost_usd: float | None = None
     error_message: str | None = None
+    # True after token-level StreamEvent text was applied for the current
+    # assistant message. Final AssistantMessage TextBlocks then skip re-add.
+    streamed_via_partial: bool = False
 
-    def add_text(self, text: str) -> None:
+    def add_text(self, text: str, *, from_partial: bool = False) -> None:
         if text:
             self.text_parts.append(text)
+            if from_partial:
+                self.streamed_via_partial = True
 
     def start_tool(self, tool_id: str, name: str, input_data: Any) -> dict[str, Any]:
         card = {
@@ -263,6 +269,24 @@ def _task_events_for_tool_end(
     return events
 
 
+def _stream_event_text_delta(raw_event: Any) -> str | None:
+    """Extract incremental assistant text from a raw Anthropic stream event."""
+    if not isinstance(raw_event, dict):
+        return None
+    if raw_event.get("type") != "content_block_delta":
+        return None
+    delta = raw_event.get("delta")
+    if not isinstance(delta, dict):
+        return None
+    # text_delta is the main assistant token stream; ignore thinking/json deltas.
+    if delta.get("type") != "text_delta":
+        return None
+    text = delta.get("text")
+    if not isinstance(text, str) or not text:
+        return None
+    return text
+
+
 def map_sdk_message(
     msg: Any,
     acc: TurnAccumulator | None = None,
@@ -276,11 +300,31 @@ def map_sdk_message(
     """
     events: list[dict[str, Any]] = []
 
+    if isinstance(msg, StreamEvent):
+        # Token-level partials (requires include_partial_messages=True).
+        if acc is not None and msg.session_id and not acc.sdk_session_id:
+            acc.sdk_session_id = msg.session_id
+        text = _stream_event_text_delta(msg.event)
+        if text:
+            if acc is not None:
+                acc.add_text(text, from_partial=True)
+            events.append({"event": "text_delta", "data": {"text": text}})
+        return events
+
     if isinstance(msg, AssistantMessage):
         content = msg.content or []
+        # Final assistant message after partial stream: text was already
+        # accumulated from StreamEvent deltas — do not double-count / re-emit.
+        skip_text = bool(acc is not None and acc.streamed_via_partial)
+        if skip_text and acc is not None:
+            # Reset so the next assistant message in this turn (after tools)
+            # can stream/accumulate cleanly.
+            acc.streamed_via_partial = False
         for block in content:
             if isinstance(block, TextBlock):
                 text = block.text or ""
+                if skip_text:
+                    continue
                 if acc is not None:
                     acc.add_text(text)
                 if text:
@@ -444,6 +488,9 @@ def build_options(session: dict[str, Any]) -> ClaudeAgentOptions:
         "model": session.get("model") or settings.chat_default_model,
         "permission_mode": settings.chat_permission_mode or "bypassPermissions",
         "env": env,
+        # Emit token-level StreamEvent partials so the UI can type out text
+        # instead of waiting for a whole AssistantMessage block.
+        "include_partial_messages": True,
     }
     resume = session.get("sdk_session_id")
     if resume:

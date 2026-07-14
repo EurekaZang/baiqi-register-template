@@ -191,8 +191,9 @@ async def test_run_agent_turn_with_fake_client(monkeypatch, tmp_path):
 
     # Fake client got the query
     assert fake.queries == ["Reply with exactly: pong"]
-    # Permission mode on options
+    # Permission mode + token-level partial streaming on options
     assert fake.options.permission_mode == "bypassPermissions"
+    assert fake.options.include_partial_messages is True
 
     # Session persisted user + assistant, idle, sdk id
     saved = get_session(sid)

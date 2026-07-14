@@ -93,6 +93,25 @@ export async function apiFetch<T = unknown>(
   return JSON.parse(text) as T
 }
 
+export type ContextUsageCategory = {
+  name: string
+  tokens: number
+  color?: string
+  is_deferred?: boolean
+}
+
+export type ContextUsage = {
+  total_tokens: number
+  max_tokens: number
+  raw_max_tokens?: number
+  percentage: number
+  model?: string | null
+  categories?: ContextUsageCategory[]
+  auto_compact?: boolean
+  auto_compact_threshold?: number
+  updated_at?: string
+}
+
 export type SessionSummary = {
   id: string
   title: string
@@ -105,6 +124,9 @@ export type SessionSummary = {
   pinned?: boolean
   messages?: Message[]
   tasks?: AgentTask[]
+  context_usage?: ContextUsage | null
+  last_usage?: Record<string, unknown> | null
+  last_cost_usd?: number | null
 }
 
 export type ToolCard = {

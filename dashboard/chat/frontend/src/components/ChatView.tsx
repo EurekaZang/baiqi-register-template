@@ -7,6 +7,7 @@ import {
   stopSession,
   streamMessage,
   type AgentTask,
+  type ContextUsage,
   type Message,
   type SessionSummary,
   type ToolCard,
@@ -15,6 +16,7 @@ import { Boxes } from 'lucide-react'
 import { extractArtifacts, type Artifact } from '../lib/content'
 import { ArtifactsPanel } from './ArtifactsPanel'
 import { Composer } from './Composer'
+import { ContextUsageMeter } from './ContextUsage'
 import { CwdPicker } from './CwdPicker'
 import { MessageList, type StreamState } from './MessageList'
 import { ModelSelect } from './ModelSelect'
@@ -83,6 +85,7 @@ export function ChatView({
   const [session, setSession] = useState<SessionSummary | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [tasks, setTasks] = useState<AgentTask[]>([])
+  const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
   const [cwd, setCwd] = useState(() => {
     try {
       return localStorage.getItem('chat_last_cwd') || ''
@@ -126,6 +129,7 @@ export function ChatView({
       setSession(null)
       setMessages([])
       setTasks([])
+      setContextUsage(null)
       // Restore last cwd for new draft instead of wiping it.
       try {
         setCwd(localStorage.getItem('chat_last_cwd') || '')
@@ -158,6 +162,7 @@ export function ChatView({
     setSession(null)
     setMessages([])
     setTasks([])
+    setContextUsage(null)
     setArtifactsOpen(false)
     setActiveArtifactId(null)
     setTasksOpen(false)
@@ -174,6 +179,7 @@ export function ChatView({
         setSession(s)
         setMessages(s.messages || [])
         setTasks(Array.isArray(s.tasks) ? s.tasks : [])
+        setContextUsage(s.context_usage || null)
         setCwd(s.cwd || '')
         setModel(s.model || defaultModel)
         // Re-attach stream UI only if this session still owns the live stream.
@@ -359,6 +365,15 @@ export function ChatView({
               touchBuffer({ tasks })
               if (viewing) setTasks(tasks)
             }
+            if (data.context_usage && typeof data.context_usage === 'object') {
+              const cu = data.context_usage as ContextUsage
+              if (viewing) setContextUsage(cu)
+            }
+          } else if (event === 'context_usage') {
+            const cu = data as unknown as ContextUsage
+            if (cu && typeof cu.total_tokens === 'number') {
+              if (viewing) setContextUsage(cu)
+            }
           } else if (event === 'text_delta') {
             const chunk = String(data.text ?? '')
             const prev = streamBuffersRef.current.get(streamId)
@@ -437,6 +452,10 @@ export function ChatView({
               touchBuffer({ tasks })
               if (viewing) setTasks(tasks)
             }
+            if (data.context_usage && typeof data.context_usage === 'object') {
+              const cu = data.context_usage as ContextUsage
+              if (viewing) setContextUsage(cu)
+            }
           }
         },
         ac.signal,
@@ -449,6 +468,7 @@ export function ChatView({
         setSession(fresh)
         setMessages(fresh.messages || [])
         setTasks(Array.isArray(fresh.tasks) ? fresh.tasks : [])
+        setContextUsage(fresh.context_usage || null)
       }
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
@@ -468,6 +488,7 @@ export function ChatView({
             setSession(fresh)
             setMessages(fresh.messages || [])
             setTasks(Array.isArray(fresh.tasks) ? fresh.tasks : [])
+            setContextUsage(fresh.context_usage || null)
           }
         } catch {
           /* ignore */
@@ -580,6 +601,7 @@ export function ChatView({
             </div>
           </div>
           <div className="header-right">
+            <ContextUsageMeter usage={contextUsage} />
             <TasksPanel
               tasks={tasks}
               open={tasksOpen}

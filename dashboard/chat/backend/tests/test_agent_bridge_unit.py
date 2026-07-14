@@ -51,11 +51,18 @@ def _client(monkeypatch, tmp_path: Path) -> TestClient:
 class FakeClient:
     """Minimal async context manager that yields scripted SDK messages."""
 
-    def __init__(self, messages: list[Any], *, options: Any = None):
+    def __init__(
+        self,
+        messages: list[Any],
+        *,
+        options: Any = None,
+        context_usage: dict[str, Any] | None = None,
+    ):
         self._messages = messages
         self.options = options
         self.queries: list[str] = []
         self.interrupted = False
+        self._context_usage = context_usage
 
     async def __aenter__(self):
         return self
@@ -72,6 +79,11 @@ class FakeClient:
 
     async def interrupt(self) -> None:
         self.interrupted = True
+
+    async def get_context_usage(self) -> dict[str, Any]:
+        if self._context_usage is None:
+            raise RuntimeError("context usage unavailable")
+        return self._context_usage
 
 
 def test_build_options_permission_mode_and_resume(monkeypatch):
@@ -162,7 +174,18 @@ async def test_run_agent_turn_with_fake_client(monkeypatch, tmp_path):
             usage={"input_tokens": 1, "output_tokens": 1},
         ),
     ]
-    fake = FakeClient(scripted)
+    fake = FakeClient(
+        scripted,
+        context_usage={
+            "categories": [{"name": "Messages", "tokens": 12, "color": "#22c55e"}],
+            "totalTokens": 1200,
+            "maxTokens": 200000,
+            "rawMaxTokens": 200000,
+            "percentage": 0.6,
+            "model": "grok-4.5",
+            "isAutoCompactEnabled": False,
+        },
+    )
 
     def factory(*, options=None):
         fake.options = options
@@ -177,6 +200,7 @@ async def test_run_agent_turn_with_fake_client(monkeypatch, tmp_path):
     assert "text_delta" in kinds
     assert "tool_start" in kinds
     assert "tool_end" in kinds
+    assert "context_usage" in kinds
     assert kinds[-1] == "done"
 
     meta_data = json.loads(events[0].data)
@@ -186,8 +210,13 @@ async def test_run_agent_turn_with_fake_client(monkeypatch, tmp_path):
     text_events = [json.loads(e.data) for e in events if e.event == "text_delta"]
     assert text_events[0]["text"] == "pong"
 
+    ctx_events = [json.loads(e.data) for e in events if e.event == "context_usage"]
+    assert ctx_events[0]["total_tokens"] == 1200
+    assert ctx_events[0]["max_tokens"] == 200000
+
     done_data = json.loads(events[-1].data)
     assert done_data["sdk_session_id"] == "sdk-xyz"
+    assert done_data["context_usage"]["percentage"] == 0.6
 
     # Fake client got the query
     assert fake.queries == ["Reply with exactly: pong"]
@@ -199,6 +228,8 @@ async def test_run_agent_turn_with_fake_client(monkeypatch, tmp_path):
     saved = get_session(sid)
     assert saved["status"] == "idle"
     assert saved["sdk_session_id"] == "sdk-xyz"
+    assert saved["context_usage"]["total_tokens"] == 1200
+    assert saved["last_usage"]["input_tokens"] == 1
     roles = [m["role"] for m in saved["messages"]]
     assert roles == ["user", "assistant"]
     assert saved["messages"][0]["content"] == "Reply with exactly: pong"

@@ -19,6 +19,7 @@ from app.agent_bridge import (
     build_options,
     map_exception,
     map_sdk_message,
+    normalize_context_usage,
 )
 from app.sse import format_sse, sse_dict
 
@@ -123,6 +124,39 @@ def test_build_options_enables_partial_messages():
         }
     )
     assert opts.include_partial_messages is True
+
+
+def test_normalize_context_usage_from_sdk_shape():
+    raw = {
+        "categories": [
+            {"name": "System prompt", "tokens": 1200, "color": "#0ea5e9"},
+            {"name": "Messages", "tokens": 3400, "color": "#22c55e"},
+        ],
+        "totalTokens": 4600,
+        "maxTokens": 200000,
+        "rawMaxTokens": 200000,
+        "percentage": 2.3,
+        "model": "grok-4.5",
+        "isAutoCompactEnabled": True,
+        "autoCompactThreshold": 180000,
+    }
+    out = normalize_context_usage(raw)
+    assert out is not None
+    assert out["total_tokens"] == 4600
+    assert out["max_tokens"] == 200000
+    assert out["percentage"] == 2.3
+    assert out["model"] == "grok-4.5"
+    assert out["auto_compact"] is True
+    assert out["auto_compact_threshold"] == 180000
+    assert len(out["categories"]) == 2
+    assert out["categories"][0]["name"] == "System prompt"
+    assert "updated_at" in out
+
+
+def test_normalize_context_usage_rejects_invalid():
+    assert normalize_context_usage(None) is None
+    assert normalize_context_usage({"totalTokens": 1}) is None
+    assert normalize_context_usage({"totalTokens": 1, "maxTokens": 0}) is None
 
 
 def test_map_assistant_multiple_text_blocks():

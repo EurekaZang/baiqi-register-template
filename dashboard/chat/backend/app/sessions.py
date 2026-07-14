@@ -203,6 +203,8 @@ def create_session(*, cwd: str, title: str | None = None, model: str | None = No
         "status": "idle",
         "pinned": False,
         "messages": [],
+        "context_usage": None,
+        "last_usage": None,
     }
     save_session(session)
     touch_recent_cwd(session["cwd"])

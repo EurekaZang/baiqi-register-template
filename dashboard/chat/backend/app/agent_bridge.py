@@ -84,6 +84,67 @@ def _summarize(value: Any, *, limit: int = 240) -> str:
     return text
 
 
+def normalize_context_usage(raw: Any) -> dict[str, Any] | None:
+    """Normalize SDK ContextUsageResponse (camelCase) into a stable UI payload."""
+    if not isinstance(raw, dict):
+        return None
+    total = raw.get("totalTokens", raw.get("total_tokens"))
+    max_tokens = raw.get("maxTokens", raw.get("max_tokens"))
+    raw_max = raw.get("rawMaxTokens", raw.get("raw_max_tokens"))
+    percentage = raw.get("percentage")
+    try:
+        total_i = int(total) if total is not None else None
+        max_i = int(max_tokens) if max_tokens is not None else None
+        raw_max_i = int(raw_max) if raw_max is not None else None
+        pct_f = float(percentage) if percentage is not None else None
+    except (TypeError, ValueError):
+        return None
+    if total_i is None or max_i is None or max_i <= 0:
+        return None
+    if pct_f is None:
+        pct_f = round(100.0 * total_i / max_i, 2)
+
+    categories: list[dict[str, Any]] = []
+    for item in raw.get("categories") or []:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        tokens = item.get("tokens")
+        if not isinstance(name, str) or tokens is None:
+            continue
+        try:
+            tok_i = int(tokens)
+        except (TypeError, ValueError):
+            continue
+        cat: dict[str, Any] = {
+            "name": name,
+            "tokens": tok_i,
+            "color": str(item.get("color") or ""),
+        }
+        if "isDeferred" in item:
+            cat["is_deferred"] = bool(item.get("isDeferred"))
+        categories.append(cat)
+
+    out: dict[str, Any] = {
+        "total_tokens": total_i,
+        "max_tokens": max_i,
+        "percentage": pct_f,
+        "model": str(raw.get("model") or "") or None,
+        "categories": categories,
+        "updated_at": _now_iso(),
+    }
+    if raw_max_i is not None:
+        out["raw_max_tokens"] = raw_max_i
+    if "isAutoCompactEnabled" in raw:
+        out["auto_compact"] = bool(raw.get("isAutoCompactEnabled"))
+    if raw.get("autoCompactThreshold") is not None:
+        try:
+            out["auto_compact_threshold"] = int(raw["autoCompactThreshold"])
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
 @dataclass
 class TurnAccumulator:
     """Collect assistant text + tool cards for one turn of persistence."""
@@ -97,6 +158,7 @@ class TurnAccumulator:
     usage: dict[str, Any] | None = None
     total_cost_usd: float | None = None
     error_message: str | None = None
+    context_usage: dict[str, Any] | None = None
     # True after token-level StreamEvent text was applied for the current
     # assistant message. Final AssistantMessage TextBlocks then skip re-add.
     streamed_via_partial: bool = False
@@ -575,6 +637,12 @@ def finalize_turn(
         session["messages"] = messages
     if acc.sdk_session_id:
         session["sdk_session_id"] = acc.sdk_session_id
+    if acc.context_usage:
+        session["context_usage"] = acc.context_usage
+    if acc.usage:
+        session["last_usage"] = acc.usage
+    if acc.total_cost_usd is not None:
+        session["last_cost_usd"] = acc.total_cost_usd
     session["status"] = "idle"
     session["updated_at"] = _now_iso()
     save_session(session)
@@ -616,6 +684,8 @@ async def run_agent_turn(
         "model": session.get("model"),
         "tasks": list(session.get("tasks") or []),
     }
+    if isinstance(session.get("context_usage"), dict):
+        meta["context_usage"] = session["context_usage"]
     yield format_sse("meta", meta)
 
     acc = TurnAccumulator()
@@ -623,6 +693,7 @@ async def run_agent_turn(
     factory = client_factory or ClaudeSDKClient
     client: ClaudeSDKClient | None = None
     done_emitted = False
+    done_payload: dict[str, Any] | None = None
 
     try:
         async with factory(options=options) as client:
@@ -639,7 +710,24 @@ async def run_agent_turn(
                 for event in map_sdk_message(msg, acc, session=session):
                     if event["event"] == "done":
                         done_emitted = True
-                    yield format_sse(event["event"], event["data"])
+                        # Defer done until after context usage is fetched so the
+                        # UI gets a complete snapshot in one event when possible.
+                        done_payload = dict(event["data"] or {})
+                    else:
+                        yield format_sse(event["event"], event["data"])
+
+            # Still connected: pull /context-equivalent window breakdown.
+            getter = getattr(client, "get_context_usage", None)
+            if callable(getter):
+                try:
+                    raw_ctx = await getter()
+                    normalized = normalize_context_usage(raw_ctx)
+                    if normalized:
+                        acc.context_usage = normalized
+                        yield format_sse("context_usage", normalized)
+                except Exception:
+                    # Best-effort: older CLI / failed probe should not fail the turn.
+                    pass
     except ClaudeSDKError as exc:
         err = map_exception(exc)
         yield format_sse(err["event"], err["data"])
@@ -658,20 +746,21 @@ async def run_agent_turn(
             except Exception:
                 pass
 
-    if not done_emitted:
-        yield format_sse(
-            "done",
-            {
-                "sdk_session_id": acc.sdk_session_id,
-                "usage": acc.usage,
-                "tasks": list(session.get("tasks") or []),
-                **(
-                    {"total_cost_usd": acc.total_cost_usd}
-                    if acc.total_cost_usd is not None
-                    else {}
-                ),
-            },
-        )
+    def _done_data(base: dict[str, Any] | None = None) -> dict[str, Any]:
+        data: dict[str, Any] = dict(base or {})
+        data.setdefault("sdk_session_id", acc.sdk_session_id)
+        data.setdefault("usage", acc.usage)
+        data["tasks"] = list(session.get("tasks") or [])
+        if acc.context_usage:
+            data["context_usage"] = acc.context_usage
+        if acc.total_cost_usd is not None:
+            data.setdefault("total_cost_usd", acc.total_cost_usd)
+        return data
+
+    if done_emitted and done_payload is not None:
+        yield format_sse("done", _done_data(done_payload))
+    elif not done_emitted:
+        yield format_sse("done", _done_data())
 
 
 class PostMessageRequest(BaseModel):

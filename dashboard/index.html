@@ -409,6 +409,35 @@
     max-height: 360px;
     overflow: auto;
   }
+  .frp-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+  @media (max-width: 900px) {
+    .frp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  .frp-meta {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+    line-height: 1.5;
+  }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+  }
+  .tag.ok { color: var(--ok); background: rgba(22, 163, 74, 0.08); border-color: rgba(22, 163, 74, 0.25); }
+  .tag.bad { color: var(--bad); background: rgba(220, 38, 38, 0.08); border-color: rgba(220, 38, 38, 0.25); }
+  .tag.warn { color: var(--warn); background: rgba(217, 119, 6, 0.08); border-color: rgba(217, 119, 6, 0.25); }
+  .tag.muted { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -439,6 +468,38 @@
   <section class="card">
     <h2>Services</h2>
     <div class="svc-strip" id="svcList"><div class="empty">loading…</div></div>
+  </section>
+
+  <section class="card" id="frpCard">
+    <div class="toolbar">
+      <h2 style="margin:0;">FRP Tunnel</h2>
+      <span class="panel-sum" id="frpSummary">—</span>
+    </div>
+    <div class="frp-grid">
+      <div class="stat"><div class="n" id="frpLocal">—</div><div class="l">local frpc</div></div>
+      <div class="stat"><div class="n" id="frpClients">—</div><div class="l">clients</div></div>
+      <div class="stat"><div class="n" id="frpOnline">—</div><div class="l">proxies online</div></div>
+      <div class="stat"><div class="n" id="frpConns">—</div><div class="l">cur conns</div></div>
+    </div>
+    <div class="frp-meta" id="frpMeta">loading…</div>
+    <div class="scroll" style="margin-top:12px;">
+      <table>
+        <thead>
+          <tr>
+            <th>name</th>
+            <th>type</th>
+            <th>status</th>
+            <th>local</th>
+            <th>public</th>
+            <th>conns</th>
+            <th>traffic out</th>
+          </tr>
+        </thead>
+        <tbody id="frpBody">
+          <tr><td colspan="7" class="empty">loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <section class="card">
@@ -867,6 +928,93 @@ function renderServices(data) {
   $('lastRefresh').textContent = 'updated ' + fmtAge(data.checked_at);
 }
 
+function fmtBytes(n) {
+  const x = Number(n) || 0;
+  if (x < 1024) return x + ' B';
+  if (x < 1024 * 1024) return (x / 1024).toFixed(1) + ' KB';
+  if (x < 1024 * 1024 * 1024) return (x / 1024 / 1024).toFixed(1) + ' MB';
+  return (x / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+}
+
+function renderFrp(data) {
+  const body = $('frpBody');
+  const sum = $('frpSummary');
+  const meta = $('frpMeta');
+  if (!data || data.enabled === false) {
+    $('frpLocal').textContent = 'off';
+    $('frpClients').textContent = '—';
+    $('frpOnline').textContent = '—';
+    $('frpConns').textContent = '—';
+    if (sum) sum.textContent = 'disabled';
+    if (meta) meta.textContent = data && data.error ? data.error : 'FRP monitoring disabled';
+    if (body) body.innerHTML = '<tr><td colspan="7" class="empty">disabled</td></tr>';
+    return;
+  }
+  const local = data.local || {};
+  const si = data.serverinfo || {};
+  const ps = data.proxy_summary || {};
+  const controlOk = !!(data.control && data.control.ok);
+  const dashOk = !!(data.dashboard && data.dashboard.ok);
+  $('frpLocal').textContent = local.active ? 'active' : (local.state || 'down');
+  $('frpLocal').style.color = local.active ? 'var(--ok)' : 'var(--bad)';
+  $('frpClients').textContent = si.client_counts != null ? si.client_counts : (data.ok ? '1?' : '0');
+  $('frpOnline').textContent = `${ps.online ?? 0}/${ps.total ?? 0}`;
+  $('frpOnline').style.color = (ps.online > 0) ? 'var(--ok)' : 'var(--warn)';
+  $('frpConns').textContent = si.cur_conns != null ? si.cur_conns : '—';
+
+  if (sum) {
+    const parts = [];
+    parts.push(data.ok ? 'up' : 'degraded');
+    parts.push(local.active ? 'frpc on' : 'frpc off');
+    if (ps.total != null) parts.push(`${ps.online || 0}/${ps.total} online`);
+    sum.textContent = parts.join(' · ');
+    sum.style.color = data.ok ? 'var(--ok)' : 'var(--bad)';
+  }
+
+  if (meta) {
+    const bits = [];
+    bits.push(`server ${data.server || '—'}:${data.control_port || '—'}`);
+    bits.push(`control ${controlOk ? 'ok' : 'down'}${data.control && data.control.latency_ms != null ? ' ' + data.control.latency_ms + 'ms' : ''}`);
+    bits.push(`dashboard ${dashOk ? 'ok' : 'auth/unreachable'}`);
+    if (si.version) bits.push(`frps ${si.version}`);
+    if (local.main_pid) bits.push(`pid ${local.main_pid}`);
+    if (si.total_traffic_out != null) bits.push(`out ${fmtBytes(si.total_traffic_out)}`);
+    if (data.error) bits.push(String(data.error));
+    meta.textContent = bits.join(' · ');
+  }
+
+  const proxies = data.proxies || [];
+  if (!body) return;
+  if (!proxies.length) {
+    body.innerHTML = `<tr><td colspan="7" class="empty">${dashOk ? 'no proxies' : (data.error || 'waiting for dashboard / proxies')}</td></tr>`;
+    return;
+  }
+  body.innerHTML = proxies.map(p => {
+    const st = String(p.status || 'unknown').toLowerCase();
+    const stCls = st === 'online' ? 'ok' : (st === 'offline' ? 'bad' : 'warn');
+    const localAddr = [p.local_ip, p.local_port].filter(v => v != null && v !== '').join(':') || '—';
+    const typ = String(p.type || '').toLowerCase();
+    const isPrivate = typ === 'stcp' || typ === 'xtcp' || typ === 'sudp';
+    const pub = p.public || (isPrivate ? `${typ || 'stcp'} (visitor + secretKey)` : (p.remote_port ? `${data.server}:${p.remote_port}` : '—'));
+    const probe = p.public_probe;
+    let probeHtml = '';
+    if (probe && probe.skipped) {
+      probeHtml = `<span class="tag ok" style="margin-left:6px;">private</span>`;
+    } else if (probe) {
+      probeHtml = `<span class="tag ${probe.ok ? 'ok' : 'bad'}" style="margin-left:6px;">${probe.ok ? 'open' : 'closed'}</span>`;
+    }
+    return `<tr>
+      <td>${escapeHtml(p.name || '?')}</td>
+      <td>${escapeHtml(p.type || '—')}</td>
+      <td><span class="tag ${stCls}">${escapeHtml(st)}</span></td>
+      <td class="muted">${escapeHtml(localAddr)}</td>
+      <td class="muted">${escapeHtml(String(pub))}${probeHtml}</td>
+      <td>${p.cur_conns ?? 0}</td>
+      <td>${fmtBytes(p.today_traffic_out)}</td>
+    </tr>`;
+  }).join('');
+}
+
 function renderAccounts(data) {
   if (!data || !data.ok) {
     $('accTotal').textContent = '—';
@@ -1087,6 +1235,7 @@ async function refreshAll() {
     }
     renderRegister(ov.register || {});
     renderAutoRegister(ov.auto_register || {});
+    renderFrp(ov.frp || {});
   } catch (e) {
     setOverall(false, 'dashboard error');
   }

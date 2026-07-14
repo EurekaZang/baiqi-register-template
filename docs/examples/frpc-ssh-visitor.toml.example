@@ -1,0 +1,17 @@
+# frpc visitor — STCP SSH (placeholders only)
+# Copy to a private path, chmod 600, replace CHANGE_ME_* values.
+# Matching server proxy name must be "ssh" on the home frpc.
+
+serverAddr = "47.100.227.205"
+serverPort = 7000
+
+auth.method = "token"
+auth.token = "CHANGE_ME_AUTH_TOKEN"
+
+[[visitors]]
+name = "ssh-visitor"
+type = "stcp"
+serverName = "ssh"
+secretKey = "CHANGE_ME_STCP_SECRET"
+bindAddr = "127.0.0.1"
+bindPort = 6000

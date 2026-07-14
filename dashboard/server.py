@@ -15,6 +15,7 @@ Usage:
 
 from __future__ import annotations
 
+import base64
 import http.client
 import json
 import os
@@ -41,6 +42,15 @@ PORT = int(os.getenv("DASHBOARD_PORT", "8090"))
 GROKCLI_URL = os.getenv("GROKCLI_API_URL", "http://127.0.0.1:3000").rstrip("/")
 GROKCLI_PASSWORD = os.getenv("GROKCLI_ADMIN_PASSWORD", "grokcli-admin-2026")
 YESCAPTCHA_KEY = os.getenv("YESCAPTCHA_KEY", "").strip()
+# frp tunnel (local frpc + remote frps dashboard)
+FRP_ENABLED = os.getenv("FRP_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
+FRP_SERVER = os.getenv("FRP_SERVER", "47.100.227.205").strip()
+FRP_CONTROL_PORT = int(os.getenv("FRP_CONTROL_PORT", "7000") or 7000)
+FRP_DASHBOARD_URL = os.getenv("FRP_DASHBOARD_URL", f"http://{FRP_SERVER}:7500").rstrip("/")
+FRP_DASHBOARD_USER = os.getenv("FRP_DASHBOARD_USER", "admin").strip()
+FRP_DASHBOARD_PASSWORD = os.getenv("FRP_DASHBOARD_PASSWORD", "").strip()
+FRP_LOCAL_UNIT = os.getenv("FRP_LOCAL_UNIT", "frpc").strip() or "frpc"
+FRP_CONFIG_PATH = Path(os.getenv("FRP_CONFIG_PATH", "/opt/frp/frpc.toml"))
 # Loopback FastAPI chat-service (public browser paths are /chat/*; strip prefix).
 CHAT_UPSTREAM = os.getenv("CHAT_UPSTREAM", "http://127.0.0.1:8091").rstrip("/")
 _CHAT_UPSTREAM_PARSED = urlparse(CHAT_UPSTREAM if "://" in CHAT_UPSTREAM else f"http://{CHAT_UPSTREAM}")
@@ -109,8 +119,8 @@ SERVICES = [
     {
         "id": "turnstile",
         "name": "Turnstile Solver",
-        "url": "http://127.0.0.1:5072/",
-        "desc": "本地 Turnstile 求解器 (port 5072)",
+        "url": "http://127.0.0.1:5073/",
+        "desc": "本地 Turnstile 求解器 (port 5073)",
         "critical": False,
     },
     {
@@ -177,6 +187,12 @@ _accounts_cache: dict[str, Any] | None = None
 _accounts_cache_at = 0.0
 _accounts_cache_lock = threading.Lock()
 _ACCOUNTS_CACHE_TTL = 4.0
+
+# frp status cache (remote dashboard + systemctl)
+_frp_cache: dict[str, Any] | None = None
+_frp_cache_at = 0.0
+_frp_cache_lock = threading.Lock()
+_FRP_CACHE_TTL = 3.0
 
 
 # ---------------------------------------------------------------------------
@@ -935,6 +951,305 @@ def api_register_stop() -> dict[str, Any]:
     return {"ok": stopped, "status": api_register_status()}
 
 
+def _tcp_probe(host: str, port: int, timeout: float = 2.0) -> dict[str, Any]:
+    t0 = time.time()
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return {
+                "ok": True,
+                "latency_ms": int((time.time() - t0) * 1000),
+            }
+    except Exception as e:
+        return {
+            "ok": False,
+            "latency_ms": int((time.time() - t0) * 1000),
+            "error": str(e)[:100],
+        }
+
+
+def _systemctl_unit(unit: str) -> dict[str, Any]:
+    """Read a system unit without needing root (status is world-readable)."""
+    out: dict[str, Any] = {
+        "unit": unit,
+        "active": False,
+        "state": "unknown",
+        "sub_state": "",
+        "main_pid": None,
+    }
+    try:
+        r = subprocess.run(
+            ["systemctl", "is-active", unit],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        state = (r.stdout or r.stderr or "").strip() or "unknown"
+        out["state"] = state
+        out["active"] = state == "active"
+    except Exception as e:
+        out["error"] = str(e)[:100]
+        return out
+    try:
+        r = subprocess.run(
+            [
+                "systemctl",
+                "show",
+                unit,
+                "-p",
+                "ActiveState",
+                "-p",
+                "SubState",
+                "-p",
+                "MainPID",
+                "-p",
+                "FragmentPath",
+                "--no-pager",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        for line in (r.stdout or "").splitlines():
+            if "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            if k == "ActiveState":
+                out["state"] = v
+                out["active"] = v == "active"
+            elif k == "SubState":
+                out["sub_state"] = v
+            elif k == "MainPID":
+                try:
+                    pid = int(v)
+                    out["main_pid"] = pid if pid > 0 else None
+                except ValueError:
+                    out["main_pid"] = None
+            elif k == "FragmentPath":
+                out["unit_path"] = v
+    except Exception:
+        pass
+    return out
+
+
+def _frp_basic_auth_header() -> dict[str, str]:
+    if not FRP_DASHBOARD_USER:
+        return {}
+    token = base64.b64encode(
+        f"{FRP_DASHBOARD_USER}:{FRP_DASHBOARD_PASSWORD}".encode()
+    ).decode()
+    return {"Authorization": f"Basic {token}"}
+
+
+def _frp_dashboard_get(path: str, timeout: float = 3.0) -> tuple[int, Any]:
+    url = f"{FRP_DASHBOARD_URL}{path}"
+    return _http("GET", url, headers=_frp_basic_auth_header(), timeout=timeout)
+
+
+def _parse_frpc_proxies(text: str) -> list[dict[str, Any]]:
+    """Best-effort parse of frpc.toml [[proxies]] blocks (no full TOML dep)."""
+    proxies: list[dict[str, Any]] = []
+    cur: dict[str, Any] | None = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[[proxies]]"):
+            if cur:
+                proxies.append(cur)
+            cur = {}
+            continue
+        if cur is None:
+            continue
+        if "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k = k.strip()
+        v = v.strip().strip('"').strip("'")
+        if k in {"name", "type", "localIP", "local_ip"}:
+            cur["localIP" if k == "local_ip" else k] = v
+        elif k in {"secretKey", "secret_key"}:
+            # Never expose secret material via API; only record presence.
+            cur["hasSecretKey"] = True
+        elif k in {"localPort", "local_port", "remotePort", "remote_port"}:
+            key = "localPort" if "local" in k.lower() else "remotePort"
+            try:
+                cur[key] = int(v)
+            except ValueError:
+                cur[key] = v
+        elif k in {"customDomains", "custom_domains"}:
+            cur["customDomains"] = v
+    if cur:
+        proxies.append(cur)
+    return proxies
+
+
+def api_frp(*, force: bool = False) -> dict[str, Any]:
+    """Local frpc + remote frps tunnel status for the 8090 dashboard."""
+    global _frp_cache, _frp_cache_at
+    if not FRP_ENABLED:
+        return {
+            "ok": False,
+            "enabled": False,
+            "error": "FRP monitoring disabled",
+            "checked_at": time.time(),
+        }
+
+    with _frp_cache_lock:
+        if (
+            not force
+            and _frp_cache is not None
+            and (time.time() - _frp_cache_at) < _FRP_CACHE_TTL
+        ):
+            return _frp_cache
+
+    t0 = time.time()
+    local = _systemctl_unit(FRP_LOCAL_UNIT)
+    control = _tcp_probe(FRP_SERVER, FRP_CONTROL_PORT, timeout=2.0)
+    dashboard_probe = _tcp_probe(
+        urlparse(FRP_DASHBOARD_URL).hostname or FRP_SERVER,
+        urlparse(FRP_DASHBOARD_URL).port
+        or (443 if (urlparse(FRP_DASHBOARD_URL).scheme or "http") == "https" else 80),
+        timeout=2.0,
+    )
+
+    serverinfo: dict[str, Any] = {}
+    serverinfo_ok = False
+    serverinfo_error = ""
+    if FRP_DASHBOARD_PASSWORD or FRP_DASHBOARD_USER:
+        status, body = _frp_dashboard_get("/api/serverinfo", timeout=3.0)
+        if status == 200 and isinstance(body, dict):
+            serverinfo = body
+            serverinfo_ok = True
+        else:
+            serverinfo_error = f"dashboard serverinfo → {status}: {str(body)[:120]}"
+
+    proxies: list[dict[str, Any]] = []
+    proxies_error = ""
+    # Prefer live state from frps dashboard (all proxy types)
+    if serverinfo_ok or FRP_DASHBOARD_PASSWORD:
+        for ptype in ("tcp", "udp", "http", "https", "stcp", "xtcp", "tcpmux"):
+            status, body = _frp_dashboard_get(f"/api/proxy/{ptype}", timeout=3.0)
+            if status != 200 or not isinstance(body, dict):
+                if status not in (0, 404):
+                    proxies_error = f"proxy/{ptype} → {status}"
+                continue
+            for p in body.get("proxies") or []:
+                if not isinstance(p, dict):
+                    continue
+                conf = p.get("conf") if isinstance(p.get("conf"), dict) else {}
+                remote_port = conf.get("remotePort") or conf.get("remote_port")
+                ptype_resolved = str(conf.get("type") or ptype or "").lower()
+                # STCP/XTCP/SUDP are private; no public remote port to probe.
+                is_private = ptype_resolved in {"stcp", "xtcp", "sudp"}
+                if is_private:
+                    public = f"{ptype_resolved} (visitor + secretKey)"
+                elif remote_port:
+                    public = f"{FRP_SERVER}:{remote_port}"
+                elif isinstance(conf.get("customDomains"), list):
+                    public = ", ".join(conf.get("customDomains") or [])
+                else:
+                    public = conf.get("customDomains") or ""
+                entry = {
+                    "name": p.get("name") or conf.get("name") or "?",
+                    "type": conf.get("type") or ptype,
+                    "status": p.get("status") or "unknown",
+                    "local_ip": conf.get("localIP") or conf.get("local_ip"),
+                    "local_port": conf.get("localPort") or conf.get("local_port"),
+                    "remote_port": remote_port,
+                    "custom_domains": conf.get("customDomains") or conf.get("custom_domains"),
+                    "cur_conns": p.get("curConns") or p.get("cur_conns") or 0,
+                    "today_traffic_in": p.get("todayTrafficIn") or 0,
+                    "today_traffic_out": p.get("todayTrafficOut") or 0,
+                    "last_start_time": p.get("lastStartTime") or "",
+                    "client_id": p.get("clientID") or p.get("client_id") or "",
+                    "public": public,
+                }
+                if is_private:
+                    entry["public_probe"] = {
+                        "ok": None,
+                        "skipped": True,
+                        "reason": "no public remote port",
+                    }
+                elif remote_port:
+                    entry["public_probe"] = _tcp_probe(
+                        FRP_SERVER, int(remote_port), timeout=1.5
+                    )
+                proxies.append(entry)
+
+    # Fallback: parse local config if dashboard gave nothing
+    config_proxies: list[dict[str, Any]] = []
+    config_readable = False
+    try:
+        if FRP_CONFIG_PATH.is_file() and os.access(FRP_CONFIG_PATH, os.R_OK):
+            config_readable = True
+            config_proxies = _parse_frpc_proxies(
+                FRP_CONFIG_PATH.read_text(encoding="utf-8", errors="replace")
+            )
+    except Exception as e:
+        config_readable = False
+        proxies_error = proxies_error or f"config read: {e}"[:80]
+
+    online_n = sum(1 for p in proxies if str(p.get("status") or "").lower() == "online")
+    clients = int(serverinfo.get("clientCounts") or serverinfo.get("client_counts") or 0)
+    ok = bool(local.get("active")) and control.get("ok") and (
+        online_n > 0 or clients > 0 or (serverinfo_ok and local.get("active"))
+    )
+    # If client is active and control port is open, treat as degraded-ok even
+    # when dashboard auth fails (still useful signal).
+    if local.get("active") and control.get("ok") and not serverinfo_ok:
+        ok = True
+
+    result: dict[str, Any] = {
+        "ok": ok,
+        "enabled": True,
+        "checked_at": time.time(),
+        "latency_ms": int((time.time() - t0) * 1000),
+        "server": FRP_SERVER,
+        "control_port": FRP_CONTROL_PORT,
+        "dashboard_url": FRP_DASHBOARD_URL,
+        "local": local,
+        "control": control,
+        "dashboard": {
+            "ok": serverinfo_ok,
+            "reachable": bool(dashboard_probe.get("ok")),
+            "probe": dashboard_probe,
+            "error": serverinfo_error or None,
+            "auth_configured": bool(FRP_DASHBOARD_PASSWORD),
+        },
+        "serverinfo": {
+            "version": serverinfo.get("version"),
+            "bind_port": serverinfo.get("bindPort") or serverinfo.get("bind_port"),
+            "vhost_http_port": serverinfo.get("vhostHTTPPort"),
+            "client_counts": clients,
+            "cur_conns": serverinfo.get("curConns") or serverinfo.get("cur_conns") or 0,
+            "proxy_type_count": serverinfo.get("proxyTypeCount")
+            or serverinfo.get("proxy_type_count")
+            or {},
+            "total_traffic_in": serverinfo.get("totalTrafficIn") or 0,
+            "total_traffic_out": serverinfo.get("totalTrafficOut") or 0,
+        }
+        if serverinfo_ok
+        else {},
+        "proxies": proxies,
+        "proxy_summary": {
+            "total": len(proxies),
+            "online": online_n,
+            "offline": max(0, len(proxies) - online_n),
+        },
+        "config": {
+            "path": str(FRP_CONFIG_PATH),
+            "readable": config_readable,
+            "proxies": config_proxies,
+        },
+        "error": proxies_error or None,
+    }
+
+    with _frp_cache_lock:
+        _frp_cache = result
+        _frp_cache_at = time.time()
+    return result
+
+
 def api_overview() -> dict[str, Any]:
     services = api_services()
     # Prefer /health for counts (no admin auth, fast). Fall back to admin list.
@@ -1004,12 +1319,23 @@ def api_overview() -> dict[str, Any]:
             }
     except Exception as e:
         auto_reg = {"ok": False, "error": str(e)[:120]}
+    frp_status: dict[str, Any]
+    try:
+        frp_status = api_frp()
+    except Exception as e:
+        frp_status = {
+            "ok": False,
+            "enabled": FRP_ENABLED,
+            "error": str(e)[:160],
+            "checked_at": time.time(),
+        }
     return {
         "services": services,
         "accounts": accounts_brief,
         "register": api_register_status(),
         "usage": usage_brief,
         "auto_register": auto_reg,
+        "frp": frp_status,
         "ts": time.time(),
     }
 
@@ -2108,6 +2434,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/register/status":
             self._json(200, api_register_status())
+            return
+        if path == "/api/frp":
+            force = (qs.get("force") or ["0"])[0] in {"1", "true", "yes"}
+            self._json(200, api_frp(force=force))
             return
         if path == "/api/health":
             self._json(200, {"status": "ok", "service": "grok-dashboard"})

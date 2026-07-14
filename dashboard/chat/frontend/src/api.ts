@@ -166,6 +166,12 @@ export type PathAttachment = {
   size?: number
 }
 
+export type MessageMeta = {
+  kind?: 'image_prompt' | 'image' | string
+  model?: string
+  urls?: string[]
+}
+
 export type Message = {
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -175,6 +181,18 @@ export type Message = {
   /** compact_boundary | compact_summary | undefined */
   kind?: string
   attachments?: PathAttachment[]
+  meta?: MessageMeta
+}
+
+export type ImageGenResponse = {
+  user_message: Message
+  assistant_message: Message
+  session: {
+    id: string
+    updated_at?: string
+    status?: string
+    title?: string
+  }
 }
 
 export type ModelItem = {
@@ -252,6 +270,18 @@ export async function recentCwds(): Promise<string[]> {
 
 export async function stopSession(id: string): Promise<void> {
   await apiFetch(`/sessions/${id}/stop`, { method: 'POST' })
+}
+
+/** Composer Image mode — generate via grok2api lite (JSON, not SSE). */
+export async function generateSessionImage(
+  sessionId: string,
+  prompt: string,
+  n = 1,
+): Promise<ImageGenResponse> {
+  return apiFetch<ImageGenResponse>(`/sessions/${sessionId}/images`, {
+    method: 'POST',
+    body: JSON.stringify({ prompt, n }),
+  })
 }
 
 /** Run Claude Code /compact on the session's SDK conversation. */

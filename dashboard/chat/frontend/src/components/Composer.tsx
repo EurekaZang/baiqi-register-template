@@ -11,6 +11,7 @@ import {
   CornerDownLeft,
   FileText,
   Image as ImageIcon,
+  MessageSquare,
   Paperclip,
   Square,
   Upload,
@@ -22,14 +23,19 @@ import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
 import { Tooltip } from './ui/tooltip'
 
+export type ComposerMode = 'chat' | 'image'
+
 export type SendPayload = {
   text: string
   attachments: PathAttachment[]
+  mode?: ComposerMode
 }
 
 type Props = {
   disabled?: boolean
   streaming?: boolean
+  /** Image generation in flight (no Stop; disables composer). */
+  imageBusy?: boolean
   onSend: (payload: SendPayload) => void
   onStop: () => void
   placeholder?: string
@@ -115,6 +121,7 @@ function imagesFromClipboard(e: ClipboardEvent): File[] {
 export function Composer({
   disabled,
   streaming,
+  imageBusy,
   onSend,
   onStop,
   placeholder = 'Message the agent…',
@@ -132,10 +139,13 @@ export function Composer({
   const [pathBusy, setPathBusy] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [uploadBusy, setUploadBusy] = useState(false)
+  const [mode, setMode] = useState<ComposerMode>('chat')
   const taRef = useRef<HTMLTextAreaElement>(null)
   const pathRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const dragDepth = useRef(0)
+  const busy = !!streaming || !!imageBusy
+  const imageMode = mode === 'image'
 
   useEffect(() => {
     if (seedText == null) return
@@ -162,6 +172,17 @@ export function Composer({
       requestAnimationFrame(() => pathRef.current?.focus())
     }
   }, [pathOpen])
+
+  function setComposerMode(next: ComposerMode) {
+    if (next === mode) return
+    setMode(next)
+    if (next === 'image') {
+      setAttachments([])
+      setPathOpen(false)
+      setPathDraft('')
+      setPathError(null)
+    }
+  }
 
   async function addPath(raw: string) {
     const path = raw.trim().replace(/^@/, '')
@@ -214,7 +235,7 @@ export function Composer({
   }
 
   async function handleFiles(fileList: FileList | File[] | null) {
-    if (!fileList || disabled || streaming) return
+    if (!fileList || disabled || busy) return
     const files = Array.from(fileList as ArrayLike<File>)
     if (!files.length) return
     if (!uploadFile) {
@@ -243,7 +264,7 @@ export function Composer({
   }
 
   function onPaste(e: ClipboardEvent) {
-    if (disabled || streaming || uploadBusy) return
+    if (imageMode || disabled || busy || uploadBusy) return
     const images = imagesFromClipboard(e)
     if (!images.length) return
     // Keep text paste behavior when clipboard is text-only; for images
@@ -254,6 +275,7 @@ export function Composer({
   }
 
   function onDragEnter(e: DragEvent) {
+    if (imageMode) return
     e.preventDefault()
     e.stopPropagation()
     dragDepth.current += 1
@@ -261,6 +283,7 @@ export function Composer({
   }
 
   function onDragLeave(e: DragEvent) {
+    if (imageMode) return
     e.preventDefault()
     e.stopPropagation()
     dragDepth.current = Math.max(0, dragDepth.current - 1)
@@ -268,12 +291,14 @@ export function Composer({
   }
 
   function onDragOver(e: DragEvent) {
+    if (imageMode) return
     e.preventDefault()
     e.stopPropagation()
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
   }
 
   function onDrop(e: DragEvent) {
+    if (imageMode) return
     e.preventDefault()
     e.stopPropagation()
     dragDepth.current = 0
@@ -283,8 +308,18 @@ export function Composer({
 
   function submit() {
     const t = text.trim()
-    if ((!t && attachments.length === 0) || disabled || streaming || uploadBusy) return
-    onSend({ text: t, attachments })
+    if (disabled || busy || uploadBusy) return
+    if (imageMode) {
+      if (!t) return
+      onSend({ text: t, attachments: [], mode: 'image' })
+      setText('')
+      setPathOpen(false)
+      setPathDraft('')
+      setPathError(null)
+      return
+    }
+    if (!t && attachments.length === 0) return
+    onSend({ text: t, attachments, mode: 'chat' })
     setText('')
     setAttachments([])
     setPathDraft('')
@@ -304,15 +339,20 @@ export function Composer({
     }
   }
 
-  const canSend =
-    !disabled &&
-    !streaming &&
-    !uploadBusy &&
-    (!!text.trim() || attachments.length > 0)
+  const canSend = imageMode
+    ? !disabled && !busy && !uploadBusy && !!text.trim()
+    : !disabled &&
+      !busy &&
+      !uploadBusy &&
+      (!!text.trim() || attachments.length > 0)
+
+  const effectivePlaceholder = imageMode
+    ? 'Describe an image to generate…'
+    : placeholder
 
   return (
     <div
-      className={`composer-shell${dragOver ? ' is-dragover' : ''}`}
+      className={`composer-shell${dragOver && !imageMode ? ' is-dragover' : ''}${imageMode ? ' is-image-mode' : ''}`}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
       onDragOver={onDragOver}
@@ -320,7 +360,7 @@ export function Composer({
       onPaste={onPaste}
     >
       {hint ? <div className="composer-hint muted">{hint}</div> : null}
-      {dragOver ? (
+      {dragOver && !imageMode ? (
         <div className="composer-drop-overlay" aria-hidden>
           <Upload className="h-5 w-5" />
           Drop files to attach under cwd
@@ -328,9 +368,9 @@ export function Composer({
       ) : null}
       <form className="composer" onSubmit={onSubmit}>
         <div
-          className={`composer-main${streaming ? ' is-streaming' : ''}${dragOver ? ' drag-target' : ''}`}
+          className={`composer-main${busy ? ' is-streaming' : ''}${dragOver && !imageMode ? ' drag-target' : ''}`}
         >
-          {attachments.length > 0 ? (
+          {!imageMode && attachments.length > 0 ? (
             <div className="composer-attach-row" aria-label="Attached project paths">
               {attachments.map((a) => (
                 <span key={a.path} className="attach-chip" title={a.path}>
@@ -340,7 +380,7 @@ export function Composer({
                     type="button"
                     className="attach-chip-x"
                     aria-label={`Remove ${a.path}`}
-                    disabled={streaming || disabled || uploadBusy}
+                    disabled={busy || disabled || uploadBusy}
                     onClick={() => removeAttachment(a.path)}
                   >
                     <X className="h-3 w-3" />
@@ -350,7 +390,7 @@ export function Composer({
             </div>
           ) : null}
 
-          {pathOpen ? (
+          {!imageMode && pathOpen ? (
             <div className="composer-path-add">
               <Input
                 ref={pathRef}
@@ -371,7 +411,7 @@ export function Composer({
                   }
                 }}
                 placeholder="Project path under cwd, e.g. src/ui.png or docs/a.md"
-                disabled={disabled || streaming || pathBusy || uploadBusy}
+                disabled={disabled || busy || pathBusy || uploadBusy}
                 className="h-8 font-mono text-xs"
                 spellCheck={false}
                 autoComplete="off"
@@ -382,7 +422,7 @@ export function Composer({
                 variant="secondary"
                 className="h-8 shrink-0"
                 disabled={
-                  disabled || streaming || pathBusy || uploadBusy || !pathDraft.trim()
+                  disabled || busy || pathBusy || uploadBusy || !pathDraft.trim()
                 }
                 onClick={() => void addPath(pathDraft)}
               >
@@ -410,58 +450,92 @@ export function Composer({
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKeyDown}
-            onPaste={onPaste}
-            placeholder={placeholder}
+            onPaste={imageMode ? undefined : onPaste}
+            placeholder={effectivePlaceholder}
             rows={1}
-            disabled={disabled}
+            disabled={disabled || !!imageBusy}
             className="composer-textarea min-h-[44px] max-h-[200px] resize-none border-0 bg-transparent px-1 py-1 shadow-none focus-visible:ring-0"
           />
           <div className="composer-toolbar">
             <div className="composer-toolbar-left">
-              <Tooltip content="Attach a path under the session cwd (image/text/code)">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2 text-xs"
-                  disabled={disabled || streaming || uploadBusy}
-                  onClick={() => setPathOpen((v) => !v)}
-                >
-                  <Paperclip className="h-3.5 w-3.5" />
-                  Path
-                </Button>
-              </Tooltip>
-              <Tooltip
-                content={
-                  uploadFile
-                    ? 'Upload files into .chat-attachments/ under cwd (or drag & drop / paste image)'
-                    : 'Open/create a session with cwd first'
-                }
+              <div
+                className="composer-mode-toggle"
+                role="group"
+                aria-label="Composer mode"
               >
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2 text-xs"
-                  disabled={disabled || streaming || uploadBusy || !uploadFile}
-                  onClick={() => fileRef.current?.click()}
+                  className={`composer-mode-btn${mode === 'chat' ? ' is-active' : ''}`}
+                  disabled={disabled || busy}
+                  onClick={() => setComposerMode('chat')}
+                  title="Chat with agent"
                 >
-                  <Upload className="h-3.5 w-3.5" />
-                  {uploadBusy ? 'Uploading…' : 'Upload'}
-                </Button>
-              </Tooltip>
-              <input
-                ref={fileRef}
-                type="file"
-                multiple
-                accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.json,.py,.ts,.tsx,.js,.jsx,.css,.html,.log,.pdf"
-                className="sr-only"
-                disabled={disabled || streaming || !uploadFile}
-                onChange={(e) => void handleFiles(e.target.files)}
-              />
-              <span className="composer-hotkey muted">
-                Enter send · paste image · drop files
-              </span>
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Chat
+                </button>
+                <button
+                  type="button"
+                  className={`composer-mode-btn${mode === 'image' ? ' is-active' : ''}`}
+                  disabled={disabled || busy}
+                  onClick={() => setComposerMode('image')}
+                  title="Generate image (grok-imagine-image-lite)"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  Image
+                </button>
+              </div>
+              {!imageMode ? (
+                <>
+                  <Tooltip content="Attach a path under the session cwd (image/text/code)">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      disabled={disabled || busy || uploadBusy}
+                      onClick={() => setPathOpen((v) => !v)}
+                    >
+                      <Paperclip className="h-3.5 w-3.5" />
+                      Path
+                    </Button>
+                  </Tooltip>
+                  <Tooltip
+                    content={
+                      uploadFile
+                        ? 'Upload files into .chat-attachments/ under cwd (or drag & drop / paste image)'
+                        : 'Open/create a session with cwd first'
+                    }
+                  >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      disabled={disabled || busy || uploadBusy || !uploadFile}
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      {uploadBusy ? 'Uploading…' : 'Upload'}
+                    </Button>
+                  </Tooltip>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    multiple
+                    accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.json,.py,.ts,.tsx,.js,.jsx,.css,.html,.log,.pdf"
+                    className="sr-only"
+                    disabled={disabled || busy || !uploadFile}
+                    onChange={(e) => void handleFiles(e.target.files)}
+                  />
+                  <span className="composer-hotkey muted">
+                    Enter send · paste image · drop files
+                  </span>
+                </>
+              ) : (
+                <span className="composer-hotkey muted">
+                  Enter generate · grok-imagine-image-lite
+                </span>
+              )}
             </div>
             <div className="composer-actions">
               {streaming ? (
@@ -471,8 +545,10 @@ export function Composer({
                 </Button>
               ) : (
                 <Button type="submit" disabled={!canSend}>
-                  Send
-                  <CornerDownLeft className="h-3.5 w-3.5 opacity-80" />
+                  {imageBusy ? 'Generating…' : imageMode ? 'Generate' : 'Send'}
+                  {!imageBusy ? (
+                    <CornerDownLeft className="h-3.5 w-3.5 opacity-80" />
+                  ) : null}
                 </Button>
               )}
             </div>

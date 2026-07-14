@@ -3,6 +3,7 @@ import {
   ApiError,
   compactSession,
   createSession,
+  generateSessionImage,
   getSession,
   patchSession,
   resolveSessionPath,
@@ -101,6 +102,7 @@ export function ChatView({
   })
   const [model, setModel] = useState(defaultModel)
   const [streaming, setStreaming] = useState<StreamState>(null)
+  const [imageBusy, setImageBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [seedText, setSeedText] = useState<string | undefined>(undefined)
@@ -314,8 +316,70 @@ export function ChatView({
     const text = typeof payload === 'string' ? payload : payload.text
     const attachments: PathAttachment[] =
       typeof payload === 'string' ? [] : payload.attachments || []
+    const mode =
+      typeof payload === 'string' ? 'chat' : payload.mode || 'chat'
     setError(null)
     let activeId = sessionId || activeIdRef.current
+
+    // Image mode: JSON generate path (no agent SSE).
+    if (mode === 'image') {
+      const prompt = text.trim()
+      if (!prompt || imageBusy || isStreaming) return
+      try {
+        if (draftMode || !activeId) {
+          activeId = await ensureSessionForUpload()
+        } else {
+          activeIdRef.current = activeId
+        }
+        const sid = activeId!
+        setImageBusy(true)
+        const res = await generateSessionImage(sid, prompt)
+        if (isViewingSession(sid)) {
+          setMessages((prev) => [
+            ...prev,
+            res.user_message,
+            res.assistant_message,
+          ])
+          setSession((s) =>
+            s
+              ? {
+                  ...s,
+                  title: res.session.title || s.title,
+                  updated_at: res.session.updated_at || s.updated_at,
+                  status: res.session.status || s.status,
+                }
+              : s,
+          )
+        }
+        try {
+          const fresh = await getSession(sid)
+          onSessionUpdated(fresh)
+          if (isViewingSession(sid)) {
+            setSession(fresh)
+            setMessages(fresh.messages || [])
+          }
+        } catch {
+          onSessionUpdated({
+            ...(session as SessionSummary),
+            id: sid,
+            title: res.session.title || session?.title || 'Chat',
+            updated_at: res.session.updated_at || new Date().toISOString(),
+            status: res.session.status || 'idle',
+          } as SessionSummary)
+        }
+      } catch (err) {
+        const msg =
+          err instanceof ApiError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : 'Image generation failed'
+        if (isViewingSession(activeId)) setError(msg)
+      } finally {
+        setImageBusy(false)
+      }
+      return
+    }
 
     // One live stream at a time in this SPA instance. Switching chats does not
     // cancel background work, but starting a new send on another session does.
@@ -604,7 +668,7 @@ export function ChatView({
 
   const headerCwd = draftMode ? cwd : session?.cwd || cwd
   const headerModel = draftMode ? model : session?.model || model
-  const running = isStreaming || session?.status === 'running'
+  const running = isStreaming || imageBusy || session?.status === 'running'
   const title =
     session?.title && session.title !== 'New chat'
       ? session.title
@@ -615,7 +679,7 @@ export function ChatView({
     <section className={`chat-view ${artifactsOpen ? 'with-artifacts' : ''}`}>
       <div className="chat-main-col">
         <header className="chat-header">
-          <div className="header-identity">
+          <div className="header-top">
             <div className="header-title-row">
               <h1 className="chat-title">{title}</h1>
               <Tooltip content="permission_mode=bypassPermissions">
@@ -633,64 +697,73 @@ export function ChatView({
                 </Tooltip>
               ) : null}
             </div>
-            <div className="header-controls">
-              <CwdPicker
-                value={headerCwd}
-                onChange={handleCwdDraftChange}
-                onCommit={handleCwdCommit}
-                disabled={running}
+            <div className="header-actions">
+              <ContextUsageMeter
+                usage={contextUsage}
+                canCompact={
+                  !draftMode &&
+                  !!session?.sdk_session_id &&
+                  (session.messages?.length || messages.length) > 0
+                }
+                compacting={compacting}
+                onCompact={
+                  running || compacting ? undefined : () => void handleCompact()
+                }
+              />
+              <TasksPanel
+                tasks={tasks}
+                open={tasksOpen}
+                onOpenChange={setTasksOpen}
               />
               <Tooltip
                 content={
-                  running
-                    ? 'Wait for the current turn to finish, then change model'
-                    : session?.sdk_session_id
-                      ? 'Applies to the next message (starts a fresh model session)'
-                      : 'Model for the next agent turn'
+                  artifactsOpen ? 'Hide artifacts panel' : 'Show artifacts panel'
                 }
               >
-                <div className="model-select-host">
-                  <ModelSelect
-                    value={headerModel}
-                    onChange={(v) => {
-                      setModel(v)
-                      if (!draftMode && sessionId) void applyModelCwd({ model: v })
-                    }}
-                    disabled={running}
-                    compact
-                  />
-                </div>
+                <Button
+                  type="button"
+                  variant={artifactsOpen ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setArtifactsOpen((v) => !v)}
+                  className={
+                    artifactsOpen
+                      ? 'header-action-btn active-toggle'
+                      : 'header-action-btn'
+                  }
+                >
+                  <Boxes className="h-3.5 w-3.5" />
+                  Artifacts{artifacts.length ? ` (${artifacts.length})` : ''}
+                </Button>
               </Tooltip>
             </div>
           </div>
-          <div className="header-right">
-            <ContextUsageMeter
-              usage={contextUsage}
-              canCompact={
-                !draftMode &&
-                !!session?.sdk_session_id &&
-                (session.messages?.length || messages.length) > 0
-              }
-              compacting={compacting}
-              onCompact={
-                running || compacting ? undefined : () => void handleCompact()
-              }
+          <div className="header-toolbar">
+            <CwdPicker
+              value={headerCwd}
+              onChange={handleCwdDraftChange}
+              onCommit={handleCwdCommit}
+              disabled={running}
             />
-            <TasksPanel
-              tasks={tasks}
-              open={tasksOpen}
-              onOpenChange={setTasksOpen}
-            />
-            <Tooltip content={artifactsOpen ? 'Hide artifacts panel' : 'Show artifacts panel'}>
-              <Button
-                type="button"
-                variant={artifactsOpen ? 'secondary' : 'ghost'}
-                onClick={() => setArtifactsOpen((v) => !v)}
-                className={artifactsOpen ? 'active-toggle' : undefined}
-              >
-                <Boxes className="h-4 w-4" />
-                Artifacts{artifacts.length ? ` (${artifacts.length})` : ''}
-              </Button>
+            <Tooltip
+              content={
+                running
+                  ? 'Wait for the current turn to finish, then change model'
+                  : session?.sdk_session_id
+                    ? 'Applies to the next message (starts a fresh model session)'
+                    : 'Model for the next agent turn'
+              }
+            >
+              <div className="model-select-host">
+                <ModelSelect
+                  value={headerModel}
+                  onChange={(v) => {
+                    setModel(v)
+                    if (!draftMode && sessionId) void applyModelCwd({ model: v })
+                  }}
+                  disabled={running}
+                  compact
+                />
+              </div>
             </Tooltip>
           </div>
         </header>
@@ -718,8 +791,9 @@ export function ChatView({
         </div>
 
         <Composer
-          disabled={loading || (draftMode && !cwd.trim())}
+          disabled={loading || (draftMode && !cwd.trim()) || imageBusy}
           streaming={isStreaming}
+          imageBusy={imageBusy}
           onSend={handleSend}
           onStop={() => void handleStop()}
           seedText={seedText}
@@ -743,9 +817,11 @@ export function ChatView({
           hint={
             draftMode && !cwd.trim()
               ? 'Set an absolute cwd above before starting.'
-              : running
-                ? 'Agent is running in Full auto mode.'
-                : 'Paste image (Ctrl+V), drop files, or Path / Upload → .chat-attachments/.'
+              : imageBusy
+                ? 'Generating image via grok-imagine-image-lite…'
+                : isStreaming || session?.status === 'running'
+                  ? 'Agent is running in Full auto mode.'
+                  : 'Chat or switch to Image mode · paste/drop files in Chat mode.'
           }
           placeholder={
             draftMode

@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from .agent_bridge import router as agent_router
 from .auth import LoginRequest, login
 from .config import settings
+from .image_gen import router as image_router
 from .models_api import router as models_router
 from .sessions import router as sessions_router
 
@@ -13,11 +14,19 @@ app = FastAPI(title="8090 Chat Agent", root_path=settings.chat_root_path)
 app.include_router(sessions_router)
 app.include_router(models_router)
 app.include_router(agent_router)
+app.include_router(image_router)
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "chat-agent"}
+    return {
+        "status": "ok",
+        "service": "chat-agent",
+        "image": {
+            "upstream": settings.chat_grok2api_url,
+            "model": settings.chat_image_model,
+        },
+    }
 
 
 @app.post("/api/auth/login")

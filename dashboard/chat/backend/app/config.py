@@ -19,5 +19,11 @@ class Settings(BaseSettings):
     sessions_dir: Path = CHAT_ROOT / "data" / "sessions"
     frontend_dist: Path = CHAT_ROOT / "frontend" / "dist"
     models_cache_ttl_sec: float = 45.0
+    # Composer Image mode → grok2api
+    chat_grok2api_url: str = "http://127.0.0.1:8000"
+    chat_image_model: str = "grok-imagine-image-lite"
+    chat_grok2api_api_key: str = ""
+    chat_image_timeout_sec: float = 120.0
+    chat_image_n: int = 1
 
 settings = Settings()

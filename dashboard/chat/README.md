@@ -4,6 +4,16 @@ ChatGPT-like UI at **`http://<host>:8090/chat`**, reverse-proxied by the Grok Pi
 
 Default agent model: **`grok-4.5`**. Permission mode: **`bypassPermissions`** (Claude Agent SDK).
 
+### Composer Image mode
+
+Toggle **Chat | Image** in the composer. Image mode calls grok2api (not the Agent SDK):
+
+- `POST /api/sessions/{id}/images` → `http://127.0.0.1:8000/v1/images/generations`
+- Model: **`grok-imagine-image-lite`** (configurable)
+- Assistant message content: markdown `![image](cdn-url)` (upstream URL; CDN may 403 without cookies)
+
+Requires **grok2api** on `:8000` in addition to model_router / chat-service / dashboard.
+
 ## Architecture
 
 ```text
@@ -103,6 +113,11 @@ Chat and Claude Code both depend on **port 8088**. When debugging chat failures:
 | `CHAT_MODEL_ROUTER_URL` | `http://127.0.0.1:8088` | chat-service | Used to list models (`GET /v1/models`). |
 | `ANTHROPIC_BASE_URL` | `http://127.0.0.1:8088` | chat-service + agent env | LLM gateway for Agent SDK. |
 | `MODELS_CACHE_TTL_SEC` | `45.0` | chat-service | In-memory models cache TTL. |
+| `CHAT_GROK2API_URL` | `http://127.0.0.1:8000` | chat-service | Upstream for Composer **Image** mode. |
+| `CHAT_IMAGE_MODEL` | `grok-imagine-image-lite` | chat-service | OpenAI-images model id on grok2api. |
+| `CHAT_GROK2API_API_KEY` | _(empty)_ | chat-service | Optional Bearer for grok2api. |
+| `CHAT_IMAGE_TIMEOUT_SEC` | `120` | chat-service | Image generation HTTP timeout. |
+| `CHAT_IMAGE_N` | `1` | chat-service | Default images per request (1–4). |
 | `CHAT_UPSTREAM` | `http://127.0.0.1:8091` | dashboard | Proxy target for `/chat/*`. |
 | `CHAT_PROXY_TIMEOUT` | `3600` | dashboard | Upstream timeout seconds (SSE-friendly). |
 | `DASHBOARD_HOST` | `127.0.0.1` | dashboard | Set `0.0.0.0` for LAN UI access. |

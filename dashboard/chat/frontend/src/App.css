@@ -544,6 +544,63 @@ textarea {
 /* Context window meter (header chip + breakdown popover) */
 .ctx-meter-wrap {
   position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.ctx-meter-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ctx-compact-btn {
+  border-radius: 999px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+
+.compact-boundary {
+  display: flex;
+  justify-content: center;
+  padding: 0.35rem 0 0.15rem;
+}
+
+.compact-boundary-line {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  max-width: 640px;
+  color: #0369a1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.compact-boundary-line::before,
+.compact-boundary-line::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #bae6fd, transparent);
+}
+
+.compact-boundary-label {
+  white-space: nowrap;
+  max-width: min(70vw, 420px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid #bae6fd;
+  background: #f0f9ff;
+}
+
+.msg.compact-summary .compact-summary-card {
+  border-style: dashed;
 }
 
 .ctx-meter {

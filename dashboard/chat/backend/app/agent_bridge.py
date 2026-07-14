@@ -826,3 +826,128 @@ async def api_stop_session(session_id: str) -> dict[str, Any]:
 
     # Live interrupt is best-effort; turn finalizer sets status=idle.
     return {"ok": True, "interrupted": interrupted}
+
+
+def _extract_compact_summary(acc: TurnAccumulator) -> str:
+    """Prefer assistant text from the compact turn; fallback to a short notice."""
+    text = (acc.content_text() or "").strip()
+    if text:
+        return text
+    return (
+        "Conversation compacted. Earlier turns were summarized to free context "
+        "window space. Continue from here."
+    )
+
+
+async def run_compact_session(
+    session_id: str,
+    *,
+    client_factory: Any | None = None,
+) -> dict[str, Any]:
+    """
+    Run Claude Code `/compact` against the resumed SDK session.
+
+    Compaction is a short agent turn that summarizes prior context. We keep the
+    existing chat transcript in the UI (so history remains browsable) and append
+    a system marker + the compact summary as an assistant message.
+    """
+    session = get_session(session_id)
+    if session.get("status") == "running" or get_active_client(session_id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot compact while session is running",
+        )
+    if not session.get("sdk_session_id"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session has no agent history to compact yet",
+        )
+    if not (session.get("messages") or []):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No messages to compact",
+        )
+
+    set_session_status(session_id, "running")
+    acc = TurnAccumulator()
+    options = build_options(session)
+    factory = client_factory or ClaudeSDKClient
+    client: ClaudeSDKClient | None = None
+    error_message: str | None = None
+
+    try:
+        async with factory(options=options) as client:
+            register_client(session_id, client)
+            # Slash command handled by Claude Code CLI — same as interactive /compact.
+            await client.query("/compact")
+            async for msg in client.receive_response():
+                map_sdk_message(msg, acc, session=session)
+
+            getter = getattr(client, "get_context_usage", None)
+            if callable(getter):
+                try:
+                    raw_ctx = await getter()
+                    normalized = normalize_context_usage(raw_ctx)
+                    if normalized:
+                        acc.context_usage = normalized
+                except Exception:
+                    pass
+    except ClaudeSDKError as exc:
+        error_message = str(exc) or exc.__class__.__name__
+    except Exception as exc:  # noqa: BLE001
+        error_message = str(exc) or exc.__class__.__name__
+    finally:
+        if client is not None:
+            unregister_client(session_id, client)
+
+    # Always restore idle; on failure do not rewrite transcript.
+    session = get_session(session_id)
+    if error_message:
+        session["status"] = "idle"
+        session["updated_at"] = _now_iso()
+        save_session(session)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Compact failed: {error_message}",
+        )
+
+    summary = _extract_compact_summary(acc)
+    now = _now_iso()
+    messages = list(session.get("messages") or [])
+    messages.append(
+        {
+            "id": str(uuid.uuid4()),
+            "role": "system",
+            "content": "Context compacted — earlier turns were summarized to free window space.",
+            "kind": "compact_boundary",
+            "created_at": now,
+        }
+    )
+    messages.append(
+        {
+            "id": str(uuid.uuid4()),
+            "role": "assistant",
+            "content": summary,
+            "kind": "compact_summary",
+            "tools": list(acc.tools),
+            "created_at": now,
+        }
+    )
+    session["messages"] = messages
+    if acc.sdk_session_id:
+        session["sdk_session_id"] = acc.sdk_session_id
+    if acc.context_usage:
+        session["context_usage"] = acc.context_usage
+    if acc.usage:
+        session["last_usage"] = acc.usage
+    session["compacted_at"] = now
+    session["status"] = "idle"
+    session["updated_at"] = now
+    save_session(session)
+    return session
+
+
+@router.post("/api/sessions/{session_id}/compact")
+async def api_compact_session(session_id: str) -> dict[str, Any]:
+    """Manually compact the agent conversation (Claude Code /compact)."""
+    return await run_compact_session(session_id)

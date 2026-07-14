@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ApiError,
+  compactSession,
   createSession,
   getSession,
   patchSession,
@@ -86,6 +87,7 @@ export function ChatView({
   const [messages, setMessages] = useState<Message[]>([])
   const [tasks, setTasks] = useState<AgentTask[]>([])
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
+  const [compacting, setCompacting] = useState(false)
   const [cwd, setCwd] = useState(() => {
     try {
       return localStorage.getItem('chat_last_cwd') || ''
@@ -130,6 +132,7 @@ export function ChatView({
       setMessages([])
       setTasks([])
       setContextUsage(null)
+      setCompacting(false)
       // Restore last cwd for new draft instead of wiping it.
       try {
         setCwd(localStorage.getItem('chat_last_cwd') || '')
@@ -532,10 +535,42 @@ export function ChatView({
         setSession(fresh)
         setMessages(fresh.messages || [])
         setTasks(Array.isArray(fresh.tasks) ? fresh.tasks : [])
+        setContextUsage(fresh.context_usage || null)
         onSessionUpdated(fresh)
       } catch {
         /* ignore */
       }
+    }
+  }
+
+  async function handleCompact() {
+    const id = sessionId || activeIdRef.current || session?.id || null
+    if (!id || draftMode || running || compacting) return
+    if (!session?.sdk_session_id) {
+      setError('Nothing to compact yet — send at least one agent turn first.')
+      return
+    }
+    setError(null)
+    setCompacting(true)
+    try {
+      const updated = await compactSession(id)
+      if (isViewingSession(id)) {
+        setSession(updated)
+        setMessages(updated.messages || [])
+        setTasks(Array.isArray(updated.tasks) ? updated.tasks : [])
+        setContextUsage(updated.context_usage || null)
+      }
+      onSessionUpdated(updated)
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Compact failed'
+      if (isViewingSession(id)) setError(msg)
+    } finally {
+      setCompacting(false)
     }
   }
 
@@ -614,7 +649,18 @@ export function ChatView({
             </div>
           </div>
           <div className="header-right">
-            <ContextUsageMeter usage={contextUsage} />
+            <ContextUsageMeter
+              usage={contextUsage}
+              canCompact={
+                !draftMode &&
+                !!session?.sdk_session_id &&
+                (session.messages?.length || messages.length) > 0
+              }
+              compacting={compacting}
+              onCompact={
+                running || compacting ? undefined : () => void handleCompact()
+              }
+            />
             <TasksPanel
               tasks={tasks}
               open={tasksOpen}

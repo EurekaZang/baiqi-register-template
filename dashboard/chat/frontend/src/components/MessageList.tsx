@@ -186,6 +186,7 @@ function Bubble({
   runningToolIds,
   onRetry,
   onOpenArtifact,
+  kind,
 }: {
   id: string
   role: string
@@ -195,29 +196,47 @@ function Bubble({
   runningToolIds?: Set<string>
   onRetry?: () => void
   onOpenArtifact?: (a: Artifact) => void
+  kind?: string
 }) {
   const isUser = role === 'user'
+  const isSystem = role === 'system' || kind === 'compact_boundary'
+  const isCompactSummary = kind === 'compact_summary'
   const { reasoning, rest } = useMemo(
-    () => (isUser ? { reasoning: [] as string[], rest: content } : extractReasoning(content)),
-    [content, isUser],
+    () =>
+      isUser || isSystem
+        ? { reasoning: [] as string[], rest: content }
+        : extractReasoning(content),
+    [content, isUser, isSystem],
   )
   const artifacts = useMemo(
-    () => (isUser ? [] : extractArtifacts(content, id)),
-    [content, id, isUser],
+    () => (isUser || isSystem ? [] : extractArtifacts(content, id)),
+    [content, id, isUser, isSystem],
   )
 
+  if (isSystem || kind === 'compact_boundary') {
+    return (
+      <div className="msg system compact-boundary">
+        <div className="compact-boundary-line" role="separator">
+          <span className="compact-boundary-label">{content}</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className={`msg ${isUser ? 'user' : 'assistant'}`}>
+    <div className={`msg ${isUser ? 'user' : 'assistant'}${isCompactSummary ? ' compact-summary' : ''}`}>
       <Card
         className={
           isUser
             ? 'msg-card user-card border-slate-200 bg-white shadow-sm'
-            : 'msg-card assistant-card border-transparent bg-transparent shadow-none'
+            : isCompactSummary
+              ? 'msg-card assistant-card compact-summary-card border-sky-100 bg-sky-50/40 shadow-none'
+              : 'msg-card assistant-card border-transparent bg-transparent shadow-none'
         }
       >
         <CardHeader className="msg-card-header flex-row items-center justify-between space-y-0 p-3 pb-1">
           <CardTitle className="msg-role text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-            {isUser ? 'You' : 'Assistant'}
+            {isUser ? 'You' : isCompactSummary ? 'Compact summary' : 'Assistant'}
           </CardTitle>
           {!isUser && streaming ? (
             <Badge variant="accent" className="msg-stream-badge gap-1.5">
@@ -366,12 +385,15 @@ export function MessageList({
           className="msg-stack"
           animate={shouldAnimate(m.id)}
         >
-          {index > 0 ? <Separator className="msg-separator my-1 opacity-60" /> : null}
+          {index > 0 && m.kind !== 'compact_boundary' ? (
+            <Separator className="msg-separator my-1 opacity-60" />
+          ) : null}
           <Bubble
             id={m.id}
             role={m.role}
             content={m.content}
             tools={m.tools}
+            kind={m.kind}
             onRetry={
               m.role === 'user' && onRetry
                 ? () => onRetry(m.content)

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Gauge } from 'lucide-react'
+import { Gauge, Minimize2 } from 'lucide-react'
 import type { ContextUsage as ContextUsageType } from '../api'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
@@ -10,6 +10,10 @@ import { cn } from '../lib/utils'
 type Props = {
   usage?: ContextUsageType | null
   className?: string
+  /** Show compact action when a compactable SDK session exists. */
+  canCompact?: boolean
+  compacting?: boolean
+  onCompact?: () => void
 }
 
 function formatTokens(n: number): string {
@@ -26,7 +30,13 @@ function levelOf(pct: number): 'ok' | 'warn' | 'hot' {
   return 'ok'
 }
 
-export function ContextUsageMeter({ usage, className }: Props) {
+export function ContextUsageMeter({
+  usage,
+  className,
+  canCompact,
+  compacting,
+  onCompact,
+}: Props) {
   const [open, setOpen] = useState(false)
 
   const pct = usage?.percentage ?? 0
@@ -41,13 +51,30 @@ export function ContextUsageMeter({ usage, className }: Props) {
 
   if (!usage || !max) {
     return (
-      <Tooltip content="Context usage appears after the first agent turn">
-        <div className={cn('ctx-meter empty', className)}>
-          <Gauge className="h-3.5 w-3.5 text-slate-400" />
-          <span className="ctx-meter-label">Context</span>
-          <span className="ctx-meter-pct muted">—</span>
-        </div>
-      </Tooltip>
+      <div className={cn('ctx-meter-wrap', className)}>
+        <Tooltip content="Context usage appears after the first agent turn">
+          <div className="ctx-meter empty">
+            <Gauge className="h-3.5 w-3.5 text-slate-400" />
+            <span className="ctx-meter-label">Context</span>
+            <span className="ctx-meter-pct muted">—</span>
+          </div>
+        </Tooltip>
+        {canCompact ? (
+          <Tooltip content="Summarize conversation to free context (Claude /compact)">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ctx-compact-btn h-8 px-2 text-xs"
+              disabled={compacting || !onCompact}
+              onClick={() => onCompact?.()}
+            >
+              <Minimize2 className={cn('h-3.5 w-3.5', compacting ? 'animate-pulse' : '')} />
+              {compacting ? 'Compacting…' : 'Compact'}
+            </Button>
+          </Tooltip>
+        ) : null}
+      </div>
     )
   }
 
@@ -55,23 +82,40 @@ export function ContextUsageMeter({ usage, className }: Props) {
 
   return (
     <div className={cn('ctx-meter-wrap', className)}>
-      <Tooltip content={tip}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className={cn('ctx-meter', `level-${level}`, open ? 'open' : '')}
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-        >
-          <Gauge className="h-3.5 w-3.5" />
-          <span className="ctx-meter-label">Context</span>
-          <span className="ctx-meter-bar" aria-hidden>
-            <span style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
-          </span>
-          <span className="ctx-meter-pct">{pct.toFixed(pct >= 10 ? 0 : 1)}%</span>
-        </Button>
-      </Tooltip>
+      <div className="ctx-meter-row">
+        <Tooltip content={tip}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn('ctx-meter', `level-${level}`, open ? 'open' : '')}
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+          >
+            <Gauge className="h-3.5 w-3.5" />
+            <span className="ctx-meter-label">Context</span>
+            <span className="ctx-meter-bar" aria-hidden>
+              <span style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+            </span>
+            <span className="ctx-meter-pct">{pct.toFixed(pct >= 10 ? 0 : 1)}%</span>
+          </Button>
+        </Tooltip>
+        {canCompact ? (
+          <Tooltip content="Summarize conversation to free context (Claude /compact)">
+            <Button
+              type="button"
+              variant={level === 'hot' || level === 'warn' ? 'secondary' : 'outline'}
+              size="sm"
+              className="ctx-compact-btn h-8 px-2 text-xs"
+              disabled={compacting || !onCompact}
+              onClick={() => onCompact?.()}
+            >
+              <Minimize2 className={cn('h-3.5 w-3.5', compacting ? 'animate-pulse' : '')} />
+              {compacting ? 'Compacting…' : 'Compact'}
+            </Button>
+          </Tooltip>
+        ) : null}
+      </div>
 
       {open ? (
         <Card className="ctx-popover shadow-lg">
@@ -133,6 +177,19 @@ export function ContextUsageMeter({ usage, className }: Props) {
                   ? ` · threshold ${formatTokens(usage.auto_compact_threshold)}`
                   : ''}
               </div>
+            ) : null}
+            {canCompact ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-1 w-full text-xs"
+                disabled={compacting || !onCompact}
+                onClick={() => onCompact?.()}
+              >
+                <Minimize2 className="h-3.5 w-3.5" />
+                {compacting ? 'Compacting…' : 'Compact conversation'}
+              </Button>
             ) : null}
           </CardContent>
         </Card>

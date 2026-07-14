@@ -163,6 +163,8 @@ export type Message = {
   content: string
   tools?: ToolCard[]
   created_at?: string
+  /** compact_boundary | compact_summary | undefined */
+  kind?: string
 }
 
 export type ModelItem = {
@@ -240,6 +242,11 @@ export async function recentCwds(): Promise<string[]> {
 
 export async function stopSession(id: string): Promise<void> {
   await apiFetch(`/sessions/${id}/stop`, { method: 'POST' })
+}
+
+/** Run Claude Code /compact on the session's SDK conversation. */
+export async function compactSession(id: string): Promise<SessionSummary> {
+  return apiFetch<SessionSummary>(`/sessions/${id}/compact`, { method: 'POST' })
 }
 
 export type SseHandler = (event: string, data: Record<string, unknown>) => void

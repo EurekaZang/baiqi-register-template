@@ -16,3 +16,5 @@ dashboard/chat/frontend/node_modules/
 dashboard/chat/data/sessions/*
 !dashboard/chat/data/sessions/.gitkeep
 dashboard/chat/.env
+# Drag/drop uploads land under session cwd
+**/.chat-attachments/

@@ -21,15 +21,18 @@ from claude_agent_sdk import (
     ToolUseBlock,
     UserMessage,
 )
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from .attachments import (
+    MAX_ATTACHMENTS,
+    MAX_UPLOAD_BYTES,
     build_prompt_with_attachments,
     normalize_path_attachments,
     prompt_as_sdk_query,
     public_attachments,
+    save_upload_under_cwd,
 )
 from .auth import require_token
 from .config import settings
@@ -871,6 +874,37 @@ def api_resolve_attachment_path(
             detail="path could not be resolved",
         )
     return public_attachments(items)[0]
+
+
+@router.post("/api/sessions/{session_id}/attachments/upload")
+async def api_upload_attachment(
+    session_id: str,
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """
+    Accept a dragged/selected browser file, store under
+    ``{cwd}/.chat-attachments/{session_id}/``, return a path attachment.
+    """
+    session = get_session(session_id)
+    if session.get("status") == "running":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot upload while session is running",
+        )
+    raw = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"file too large (>{MAX_UPLOAD_BYTES} bytes)",
+        )
+    item = save_upload_under_cwd(
+        str(session.get("cwd") or ""),
+        session_id,
+        filename=file.filename or "upload.bin",
+        data=raw,
+        content_type=file.content_type,
+    )
+    return item
 
 
 @router.post("/api/sessions/{session_id}/stop")

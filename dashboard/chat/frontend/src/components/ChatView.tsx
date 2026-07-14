@@ -8,6 +8,7 @@ import {
   resolveSessionPath,
   stopSession,
   streamMessage,
+  uploadSessionFile,
   type AgentTask,
   type ContextUsage,
   type Message,
@@ -722,12 +723,17 @@ export function ChatView({
               ? (path) => resolveSessionPath(sessionId, path)
               : undefined
           }
+          uploadFile={
+            !draftMode && sessionId
+              ? (file) => uploadSessionFile(sessionId, file)
+              : undefined
+          }
           hint={
             draftMode && !cwd.trim()
               ? 'Set an absolute cwd above before starting.'
               : running
                 ? 'Agent is running in Full auto mode.'
-                : 'Attach project paths with Path (images under cwd are sent as vision).'
+                : 'Drop files here, or use Path / Upload (saved under .chat-attachments/).'
           }
           placeholder={
             draftMode

@@ -271,6 +271,26 @@ export async function resolveSessionPath(
   })
 }
 
+/** Upload a dragged/selected browser file into session cwd .chat-attachments/. */
+export async function uploadSessionFile(
+  sessionId: string,
+  file: File,
+): Promise<PathAttachment> {
+  const url = `${apiBase()}/sessions/${sessionId}/attachments/upload`
+  const headers = authHeaders()
+  // Let the browser set multipart boundary — do not force JSON content-type.
+  headers.delete('Content-Type')
+  const form = new FormData()
+  form.append('file', file, file.name)
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: form,
+  })
+  if (!res.ok) throw await parseError(res)
+  return (await res.json()) as PathAttachment
+}
+
 /**
  * POST messages and parse SSE via fetch ReadableStream (Bearer auth).
  * Returns AbortController for cancel; also call stopSession for server interrupt.

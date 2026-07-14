@@ -2,10 +2,19 @@ import {
   useEffect,
   useRef,
   useState,
+  type DragEvent,
   type FormEvent,
   type KeyboardEvent,
 } from 'react'
-import { CornerDownLeft, FileText, Image as ImageIcon, Paperclip, Square, X } from 'lucide-react'
+import {
+  CornerDownLeft,
+  FileText,
+  Image as ImageIcon,
+  Paperclip,
+  Square,
+  Upload,
+  X,
+} from 'lucide-react'
 import type { PathAttachment } from '../api'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -32,6 +41,8 @@ type Props = {
    * as draft chips and validated on send by the backend.
    */
   resolvePath?: (path: string) => Promise<PathAttachment>
+  /** Upload dragged/selected browser files into session cwd. */
+  uploadFile?: (file: File) => Promise<PathAttachment>
 }
 
 function shortName(path: string): string {
@@ -55,6 +66,7 @@ export function Composer({
   onSeedConsumed,
   hint,
   resolvePath,
+  uploadFile,
 }: Props) {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<PathAttachment[]>([])
@@ -62,8 +74,12 @@ export function Composer({
   const [pathOpen, setPathOpen] = useState(false)
   const [pathError, setPathError] = useState<string | null>(null)
   const [pathBusy, setPathBusy] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const [uploadBusy, setUploadBusy] = useState(false)
   const taRef = useRef<HTMLTextAreaElement>(null)
   const pathRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const dragDepth = useRef(0)
 
   useEffect(() => {
     if (seedText == null) return
@@ -133,9 +149,74 @@ export function Composer({
     setAttachments((prev) => prev.filter((a) => a.path !== path))
   }
 
+  function pushAttachment(item: PathAttachment) {
+    setAttachments((prev) => {
+      if (prev.some((a) => a.path === item.path)) return prev
+      if (prev.length >= 12) return prev
+      return [...prev, { ...item, type: 'path' }]
+    })
+  }
+
+  async function handleFiles(fileList: FileList | File[] | null) {
+    if (!fileList || disabled || streaming) return
+    const files = Array.from(fileList as ArrayLike<File>)
+    if (!files.length) return
+    if (!uploadFile) {
+      setPathError('Create/open a session first, then drop files (needs cwd).')
+      return
+    }
+    setUploadBusy(true)
+    setPathError(null)
+    const errors: string[] = []
+    try {
+      for (const file of files.slice(0, 12)) {
+        try {
+          const item = await uploadFile(file)
+          pushAttachment(item)
+        } catch (err) {
+          errors.push(
+            `${file.name}: ${err instanceof Error ? err.message : 'upload failed'}`,
+          )
+        }
+      }
+    } finally {
+      setUploadBusy(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+    if (errors.length) setPathError(errors.slice(0, 3).join(' · '))
+  }
+
+  function onDragEnter(e: DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    dragDepth.current += 1
+    if (e.dataTransfer?.types?.includes('Files')) setDragOver(true)
+  }
+
+  function onDragLeave(e: DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragOver(false)
+  }
+
+  function onDragOver(e: DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    dragDepth.current = 0
+    setDragOver(false)
+    void handleFiles(e.dataTransfer?.files || null)
+  }
+
   function submit() {
     const t = text.trim()
-    if ((!t && attachments.length === 0) || disabled || streaming) return
+    if ((!t && attachments.length === 0) || disabled || streaming || uploadBusy) return
     onSend({ text: t, attachments })
     setText('')
     setAttachments([])
@@ -156,13 +237,31 @@ export function Composer({
     }
   }
 
-  const canSend = !disabled && !streaming && (!!text.trim() || attachments.length > 0)
+  const canSend =
+    !disabled &&
+    !streaming &&
+    !uploadBusy &&
+    (!!text.trim() || attachments.length > 0)
 
   return (
-    <div className="composer-shell">
+    <div
+      className={`composer-shell${dragOver ? ' is-dragover' : ''}`}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       {hint ? <div className="composer-hint muted">{hint}</div> : null}
+      {dragOver ? (
+        <div className="composer-drop-overlay" aria-hidden>
+          <Upload className="h-5 w-5" />
+          Drop files to attach under cwd
+        </div>
+      ) : null}
       <form className="composer" onSubmit={onSubmit}>
-        <div className={`composer-main${streaming ? ' is-streaming' : ''}`}>
+        <div
+          className={`composer-main${streaming ? ' is-streaming' : ''}${dragOver ? ' drag-target' : ''}`}
+        >
           {attachments.length > 0 ? (
             <div className="composer-attach-row" aria-label="Attached project paths">
               {attachments.map((a) => (
@@ -173,7 +272,7 @@ export function Composer({
                     type="button"
                     className="attach-chip-x"
                     aria-label={`Remove ${a.path}`}
-                    disabled={streaming || disabled}
+                    disabled={streaming || disabled || uploadBusy}
                     onClick={() => removeAttachment(a.path)}
                   >
                     <X className="h-3 w-3" />
@@ -204,7 +303,7 @@ export function Composer({
                   }
                 }}
                 placeholder="Project path under cwd, e.g. src/ui.png or docs/a.md"
-                disabled={disabled || streaming || pathBusy}
+                disabled={disabled || streaming || pathBusy || uploadBusy}
                 className="h-8 font-mono text-xs"
                 spellCheck={false}
                 autoComplete="off"
@@ -214,7 +313,9 @@ export function Composer({
                 size="sm"
                 variant="secondary"
                 className="h-8 shrink-0"
-                disabled={disabled || streaming || pathBusy || !pathDraft.trim()}
+                disabled={
+                  disabled || streaming || pathBusy || uploadBusy || !pathDraft.trim()
+                }
                 onClick={() => void addPath(pathDraft)}
               >
                 {pathBusy ? '…' : 'Add'}
@@ -254,15 +355,42 @@ export function Composer({
                   variant="ghost"
                   size="sm"
                   className="h-8 px-2 text-xs"
-                  disabled={disabled || streaming}
+                  disabled={disabled || streaming || uploadBusy}
                   onClick={() => setPathOpen((v) => !v)}
                 >
                   <Paperclip className="h-3.5 w-3.5" />
                   Path
                 </Button>
               </Tooltip>
+              <Tooltip
+                content={
+                  uploadFile
+                    ? 'Upload files into .chat-attachments/ under cwd (or drag & drop)'
+                    : 'Open/create a session with cwd first'
+                }
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  disabled={disabled || streaming || uploadBusy || !uploadFile}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  {uploadBusy ? 'Uploading…' : 'Upload'}
+                </Button>
+              </Tooltip>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                className="sr-only"
+                disabled={disabled || streaming || !uploadFile}
+                onChange={(e) => void handleFiles(e.target.files)}
+              />
               <span className="composer-hotkey muted">
-                Enter send · Shift+Enter newline · Path = project files
+                Enter send · drop files · Path / Upload
               </span>
             </div>
             <div className="composer-actions">

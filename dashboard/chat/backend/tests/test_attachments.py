@@ -8,10 +8,12 @@ import pytest
 from fastapi import HTTPException
 
 from app.attachments import (
+    CHAT_ATTACH_DIRNAME,
     build_prompt_with_attachments,
     normalize_path_attachments,
     public_attachments,
     resolve_path_under_cwd,
+    save_upload_under_cwd,
 )
 
 
@@ -93,3 +95,48 @@ def test_build_prompt_text_only_paths(tmp_path: Path):
     assert "a.py" in prompt
     assert "print(1)" in prompt
     assert public[0]["kind"] == "text"
+
+
+def test_save_upload_under_cwd(tmp_path: Path):
+    root = tmp_path / "proj"
+    root.mkdir()
+    data = b"\x89PNG\r\n\x1a\n" + b"drop-me"
+    item = save_upload_under_cwd(
+        root,
+        "sess-1",
+        filename="../../evil.png",
+        data=data,
+        content_type="image/png",
+    )
+    assert item["kind"] == "image"
+    assert item["path"].startswith(f"{CHAT_ATTACH_DIRNAME}/sess-1/")
+    assert ".." not in item["path"]
+    saved = root / item["path"]
+    assert saved.is_file()
+    assert saved.read_bytes() == data
+    # Still resolvable as a normal path attachment
+    items = normalize_path_attachments(str(root), [{"type": "path", "path": item["path"]}])
+    assert items[0]["path"] == item["path"]
+
+
+def test_save_upload_rejects_huge_and_bad_type(tmp_path: Path):
+    root = tmp_path / "proj"
+    root.mkdir()
+    with pytest.raises(HTTPException) as ei:
+        save_upload_under_cwd(
+            root,
+            "s",
+            filename="x.exe",
+            data=b"MZ" + b"0" * 100,
+            content_type="application/octet-stream",
+        )
+    assert ei.value.status_code == 400
+
+    with pytest.raises(HTTPException):
+        save_upload_under_cwd(
+            root,
+            "s",
+            filename="big.png",
+            data=b"x" * (20 * 1024 * 1024 + 10),
+            content_type="image/png",
+        )

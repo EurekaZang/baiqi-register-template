@@ -3,7 +3,7 @@ import { FolderOpen, History } from 'lucide-react'
 import { recentCwds } from '../api'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
-import { Select } from './ui/select'
+import { NativeSelect } from './ui/native-select'
 import { Tooltip } from './ui/tooltip'
 import { cn } from '../lib/utils'
 
@@ -143,7 +143,7 @@ export function CwdPicker({
         <Tooltip content="Choose a recent working directory">
           <div className="cwd-recent-wrap">
             <History className="cwd-recent-icon" aria-hidden />
-            <Select
+            <NativeSelect
               className="cwd-recent h-9 font-mono text-xs"
               value=""
               disabled={disabled}
@@ -161,7 +161,7 @@ export function CwdPicker({
                   {shortPath(c)}
                 </option>
               ))}
-            </Select>
+            </NativeSelect>
           </div>
         </Tooltip>
       )}

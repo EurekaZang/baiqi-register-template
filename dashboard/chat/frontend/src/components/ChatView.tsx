@@ -15,6 +15,7 @@ import {
   type Message,
   type PathAttachment,
   type SessionSummary,
+  type SubAgent,
   type ToolCard,
 } from '../api'
 import type { SendPayload } from './Composer'
@@ -30,6 +31,37 @@ import { TasksPanel } from './TasksPanel'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Tooltip } from './ui/tooltip'
+
+function upsertSubagentOnTools(
+  tools: ToolCard[],
+  subagent: SubAgent,
+  parentToolUseId?: string | null,
+): ToolCard[] {
+  const parentId = parentToolUseId || subagent.parent_tool_use_id || ''
+  if (!parentId) {
+    // No parent yet — keep as-is; parent tool_start will attach later via buffer.
+    return tools
+  }
+  let found = false
+  const next = tools.map((t) => {
+    if (t.id !== parentId) return t
+    found = true
+    return { ...t, subagent }
+  })
+  if (found) return next
+  // Parent tool card not created yet: synthesize a placeholder so nested UI can show.
+  return [
+    ...next,
+    {
+      id: parentId,
+      name: 'Agent',
+      input_summary: subagent.name || subagent.agent_type || 'subagent',
+      output_summary: '',
+      ok: true,
+      subagent,
+    },
+  ]
+}
 
 function upsertTask(list: AgentTask[], task: AgentTask): AgentTask[] {
   const id = String(task.id)
@@ -119,7 +151,15 @@ export function ChatView({
   const streamSessionIdRef = useRef<string | null>(null)
   /** Live stream snapshots so switching away/back can rehydrate partial UI. */
   const streamBuffersRef = useRef<
-    Map<string, { text: string; tools: ToolCard[]; tasks?: AgentTask[] }>
+    Map<
+      string,
+      {
+        text: string
+        tools: ToolCard[]
+        tasks?: AgentTask[]
+        subagents?: Record<string, SubAgent>
+      }
+    >
   >(new Map())
 
   const isStreaming =
@@ -416,11 +456,13 @@ export function ChatView({
       const ac = new AbortController()
       abortRef.current = ac
       const toolsMap = new Map<string, ToolCard>()
+      const subagentsMap = new Map<string, SubAgent>()
 
       const touchBuffer = (patch: {
         text?: string
         tools?: ToolCard[]
         tasks?: AgentTask[]
+        subagents?: Record<string, SubAgent>
       }) => {
         const prev = streamBuffersRef.current.get(streamId) || {
           text: '',
@@ -430,7 +472,48 @@ export function ChatView({
           text: patch.text ?? prev.text,
           tools: patch.tools ?? prev.tools,
           tasks: patch.tasks ?? prev.tasks,
+          subagents: patch.subagents ?? prev.subagents,
         })
+      }
+
+      const publishTools = (tools: ToolCard[]) => {
+        touchBuffer({
+          tools,
+          subagents: Object.fromEntries(subagentsMap.entries()),
+        })
+        if (!isViewingSession(streamId)) return
+        setStreaming((s) => ({
+          text: s?.text || streamBuffersRef.current.get(streamId)?.text || '',
+          tools,
+          active: true,
+        }))
+      }
+
+      const applySubagent = (partial: Partial<SubAgent> & { id: string }) => {
+        const prev = subagentsMap.get(partial.id)
+        const next: SubAgent = {
+          id: partial.id,
+          name: partial.name || prev?.name || partial.agent_type || 'subagent',
+          agent_type: partial.agent_type || prev?.agent_type,
+          parent_tool_use_id:
+            partial.parent_tool_use_id || prev?.parent_tool_use_id,
+          status: partial.status || prev?.status || 'running',
+          text:
+            partial.text !== undefined
+              ? partial.text
+              : prev?.text || '',
+          tools: partial.tools || prev?.tools || [],
+          summary:
+            partial.summary !== undefined ? partial.summary : prev?.summary,
+        }
+        subagentsMap.set(next.id, next)
+        // Re-nest onto current tool cards.
+        let tools = Array.from(toolsMap.values())
+        tools = upsertSubagentOnTools(tools, next, next.parent_tool_use_id)
+        // Keep toolsMap in sync with nested attachment / placeholder parent.
+        for (const t of tools) toolsMap.set(t.id, t)
+        publishTools(tools)
+        return next
       }
 
       await streamMessage(
@@ -468,24 +551,27 @@ export function ChatView({
                 : { text: nextText, tools: [], active: true },
             )
           } else if (event === 'tool_start') {
+            const id = String(data.id ?? crypto.randomUUID())
+            const existing = toolsMap.get(id)
             const card: ToolCard = {
-              id: String(data.id ?? crypto.randomUUID()),
-              name: String(data.name ?? 'tool'),
+              id,
+              name: String(data.name ?? existing?.name ?? 'tool'),
               input_summary: data.input_summary
                 ? String(data.input_summary)
-                : '',
-              output_summary: '',
-              ok: true,
+                : existing?.input_summary || '',
+              output_summary: existing?.output_summary || '',
+              ok: existing?.ok ?? true,
+              subagent: existing?.subagent,
+            }
+            // If a subagent already claimed this parent, reattach.
+            for (const sa of subagentsMap.values()) {
+              if (sa.parent_tool_use_id === id) {
+                card.subagent = sa
+                break
+              }
             }
             toolsMap.set(card.id, card)
-            const tools = Array.from(toolsMap.values())
-            touchBuffer({ tools })
-            if (!viewing) return
-            setStreaming((s) => ({
-              text: s?.text || streamBuffersRef.current.get(streamId)?.text || '',
-              tools,
-              active: true,
-            }))
+            publishTools(Array.from(toolsMap.values()))
           } else if (event === 'tool_end') {
             const id = String(data.id ?? '')
             const existing = toolsMap.get(id) || {
@@ -498,15 +584,106 @@ export function ChatView({
               : existing.output_summary
             existing.ok = data.ok !== false
             if (data.name) existing.name = String(data.name)
+            // Preserve nested subagent if present.
+            for (const sa of subagentsMap.values()) {
+              if (sa.parent_tool_use_id === id) {
+                existing.subagent = sa
+                break
+              }
+            }
             toolsMap.set(id, existing)
-            const tools = Array.from(toolsMap.values())
-            touchBuffer({ tools })
-            if (!viewing) return
-            setStreaming((s) => ({
-              text: s?.text || streamBuffersRef.current.get(streamId)?.text || '',
+            publishTools(Array.from(toolsMap.values()))
+          } else if (event === 'subagent_start') {
+            applySubagent({
+              id: String(data.id ?? crypto.randomUUID()),
+              name: String(data.name ?? data.agent_type ?? 'subagent'),
+              agent_type: data.agent_type
+                ? String(data.agent_type)
+                : undefined,
+              parent_tool_use_id: data.parent_tool_use_id
+                ? String(data.parent_tool_use_id)
+                : undefined,
+              status: String(data.status ?? 'running'),
+              text: '',
+              tools: [],
+            })
+          } else if (event === 'subagent_text_delta') {
+            const id = String(data.id ?? '')
+            if (!id) return
+            const prev = subagentsMap.get(id)
+            applySubagent({
+              id,
+              name: prev?.name,
+              agent_type: prev?.agent_type,
+              parent_tool_use_id:
+                (data.parent_tool_use_id
+                  ? String(data.parent_tool_use_id)
+                  : prev?.parent_tool_use_id) || undefined,
+              status: prev?.status || 'running',
+              text: (prev?.text || '') + String(data.text ?? ''),
+              tools: prev?.tools || [],
+            })
+          } else if (event === 'subagent_tool_start' || event === 'subagent_tool_end') {
+            const id = String(data.id ?? '')
+            if (!id) return
+            const prev = subagentsMap.get(id)
+            const toolData = (data.tool || {}) as Record<string, unknown>
+            const toolId = String(toolData.id ?? crypto.randomUUID())
+            const tools = [...(prev?.tools || [])]
+            const idx = tools.findIndex((t) => t.id === toolId)
+            const nextTool: ToolCard = {
+              id: toolId,
+              name: String(toolData.name ?? (idx >= 0 ? tools[idx].name : 'tool')),
+              input_summary:
+                toolData.input_summary != null
+                  ? String(toolData.input_summary)
+                  : idx >= 0
+                    ? tools[idx].input_summary
+                    : '',
+              output_summary:
+                toolData.output_summary != null
+                  ? String(toolData.output_summary)
+                  : idx >= 0
+                    ? tools[idx].output_summary
+                    : '',
+              ok:
+                toolData.ok !== undefined
+                  ? toolData.ok !== false
+                  : idx >= 0
+                    ? tools[idx].ok
+                    : true,
+            }
+            if (idx >= 0) tools[idx] = nextTool
+            else tools.push(nextTool)
+            applySubagent({
+              id,
+              name: prev?.name,
+              agent_type: prev?.agent_type,
+              parent_tool_use_id:
+                (data.parent_tool_use_id
+                  ? String(data.parent_tool_use_id)
+                  : prev?.parent_tool_use_id) || undefined,
+              status: prev?.status || 'running',
+              text: prev?.text || '',
               tools,
-              active: true,
-            }))
+            })
+          } else if (event === 'subagent_done') {
+            const id = String(data.id ?? '')
+            if (!id) return
+            const prev = subagentsMap.get(id)
+            applySubagent({
+              id,
+              name: prev?.name,
+              agent_type: prev?.agent_type,
+              parent_tool_use_id:
+                (data.parent_tool_use_id
+                  ? String(data.parent_tool_use_id)
+                  : prev?.parent_tool_use_id) || undefined,
+              status: String(data.status ?? 'done'),
+              text: prev?.text || '',
+              tools: prev?.tools || [],
+              summary: data.summary != null ? String(data.summary) : prev?.summary,
+            })
           } else if (event === 'task_create' || event === 'task_update') {
             const task = data.task as AgentTask | undefined
             if (task && task.id != null) {

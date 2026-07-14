@@ -10,10 +10,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from claude_agent_sdk import (
+    AgentDefinition,
     AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
     ClaudeSDKError,
+    HookEventMessage,
     ResultMessage,
     StreamEvent,
     TextBlock,
@@ -52,6 +54,54 @@ router = APIRouter(dependencies=[Depends(require_token)])
 
 # session_id → active ClaudeSDKClient (for /stop interrupt)
 _active_clients: dict[str, ClaudeSDKClient] = {}
+
+# Predefined subagents invokable via the Claude Agent SDK Agent tool.
+DEFAULT_SUBAGENTS: dict[str, AgentDefinition] = {
+    "explore": AgentDefinition(
+        description=(
+            "Read-only exploration specialist. Use for searching the codebase, "
+            "reading files, locating symbols, and summarizing findings without edits."
+        ),
+        prompt=(
+            "You are an explore subagent. Prefer read/search tools. Do not modify "
+            "files unless explicitly required. Return concise findings with paths."
+        ),
+        model="inherit",
+    ),
+    "shell": AgentDefinition(
+        description=(
+            "Command/diagnostics specialist. Use for shell commands, logs, process "
+            "checks, and environment inspection."
+        ),
+        prompt=(
+            "You are a shell subagent. Run focused commands, capture relevant output, "
+            "and explain results briefly. Avoid destructive commands unless requested."
+        ),
+        model="inherit",
+    ),
+    "review": AgentDefinition(
+        description=(
+            "Code review specialist. Use for correctness, security, tests, and "
+            "maintainability review of specific files or diffs."
+        ),
+        prompt=(
+            "You are a review subagent. Inspect the provided scope carefully, list "
+            "concrete issues with severity, and suggest minimal fixes."
+        ),
+        model="inherit",
+    ),
+    "general": AgentDefinition(
+        description=(
+            "General-purpose subagent for multi-step delegated work that does not "
+            "fit explore/shell/review."
+        ),
+        prompt=(
+            "You are a general subagent. Complete the delegated task thoroughly and "
+            "return a clear summary of actions and outcomes."
+        ),
+        model="inherit",
+    ),
+}
 
 
 def _now_iso() -> str:
@@ -163,6 +213,12 @@ class TurnAccumulator:
     tools_by_id: dict[str, dict[str, Any]] = field(default_factory=dict)
     # tool_use_id → pending task tool metadata for create/update finalization
     task_tool_meta: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Nested subagent state for live SSE + persistence under parent tools.
+    subagents_by_id: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # parent_tool_use_id → subagent id
+    parent_to_subagent: dict[str, str] = field(default_factory=dict)
+    # parent_tool_use_id → partial stream flag for that subagent
+    subagent_streamed_partial: dict[str, bool] = field(default_factory=dict)
     sdk_session_id: str | None = None
     usage: dict[str, Any] | None = None
     total_cost_usd: float | None = None
@@ -186,6 +242,10 @@ class TurnAccumulator:
             "output_summary": "",
             "ok": True,
         }
+        # Attach any subagent already linked to this parent tool.
+        sub_id = self.parent_to_subagent.get(tool_id)
+        if sub_id and sub_id in self.subagents_by_id:
+            card["subagent"] = self.subagents_by_id[sub_id]
         self.tools.append(card)
         self.tools_by_id[tool_id] = card
         if name in TASK_TOOLS:
@@ -220,12 +280,169 @@ class TurnAccumulator:
         card["output_summary"] = _summarize(output)
         if is_error is not None:
             card["ok"] = not bool(is_error)
+        # Keep nested subagent snapshot fresh on the parent tool card.
+        sub_id = self.parent_to_subagent.get(tool_id)
+        if sub_id and sub_id in self.subagents_by_id:
+            card["subagent"] = self.subagents_by_id[sub_id]
         return card
+
+    def ensure_subagent(
+        self,
+        *,
+        subagent_id: str,
+        name: str | None = None,
+        agent_type: str | None = None,
+        parent_tool_use_id: str | None = None,
+        status: str = "running",
+    ) -> dict[str, Any]:
+        sid = str(subagent_id)
+        rec = self.subagents_by_id.get(sid)
+        if rec is None:
+            rec = {
+                "id": sid,
+                "name": name or agent_type or "subagent",
+                "agent_type": agent_type or name or "subagent",
+                "parent_tool_use_id": parent_tool_use_id,
+                "status": status,
+                "text": "",
+                "tools": [],
+            }
+            self.subagents_by_id[sid] = rec
+        else:
+            if name:
+                rec["name"] = name
+            if agent_type:
+                rec["agent_type"] = agent_type
+            if parent_tool_use_id:
+                rec["parent_tool_use_id"] = parent_tool_use_id
+            if status:
+                rec["status"] = status
+        if parent_tool_use_id:
+            self.parent_to_subagent[str(parent_tool_use_id)] = sid
+            parent = self.tools_by_id.get(str(parent_tool_use_id))
+            if parent is not None:
+                parent["subagent"] = rec
+        return rec
+
+    def subagent_for_parent(self, parent_tool_use_id: str | None) -> dict[str, Any] | None:
+        if not parent_tool_use_id:
+            return None
+        sid = self.parent_to_subagent.get(str(parent_tool_use_id))
+        if sid and sid in self.subagents_by_id:
+            return self.subagents_by_id[sid]
+        # Synthetic id until a real SubagentStart arrives.
+        return self.ensure_subagent(
+            subagent_id=f"parent:{parent_tool_use_id}",
+            name="subagent",
+            agent_type="subagent",
+            parent_tool_use_id=str(parent_tool_use_id),
+            status="running",
+        )
+
+    def add_subagent_text(
+        self,
+        parent_tool_use_id: str | None,
+        text: str,
+        *,
+        from_partial: bool = False,
+        subagent_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        if not text:
+            return None
+        if subagent_id:
+            rec = self.ensure_subagent(
+                subagent_id=subagent_id,
+                parent_tool_use_id=parent_tool_use_id,
+            )
+        else:
+            rec = self.subagent_for_parent(parent_tool_use_id)
+        if rec is None:
+            return None
+        rec["text"] = (rec.get("text") or "") + text
+        if from_partial and parent_tool_use_id:
+            self.subagent_streamed_partial[str(parent_tool_use_id)] = True
+        return rec
+
+    def start_subagent_tool(
+        self,
+        parent_tool_use_id: str | None,
+        tool_id: str,
+        name: str,
+        input_data: Any,
+        *,
+        subagent_id: str | None = None,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+        if subagent_id:
+            rec = self.ensure_subagent(
+                subagent_id=subagent_id,
+                parent_tool_use_id=parent_tool_use_id,
+            )
+        else:
+            rec = self.subagent_for_parent(parent_tool_use_id)
+        card = {
+            "id": tool_id,
+            "name": name,
+            "input_summary": _summarize(input_data),
+            "output_summary": "",
+            "ok": True,
+        }
+        if rec is not None:
+            tools = list(rec.get("tools") or [])
+            # Replace if same id already present.
+            tools = [t for t in tools if t.get("id") != tool_id]
+            tools.append(card)
+            rec["tools"] = tools
+        return rec, card
+
+    def end_subagent_tool(
+        self,
+        parent_tool_use_id: str | None,
+        tool_id: str,
+        *,
+        output: Any = None,
+        is_error: bool | None = None,
+        name: str | None = None,
+        subagent_id: str | None = None,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+        if subagent_id:
+            rec = self.ensure_subagent(
+                subagent_id=subagent_id,
+                parent_tool_use_id=parent_tool_use_id,
+            )
+        else:
+            rec = self.subagent_for_parent(parent_tool_use_id)
+        card: dict[str, Any] = {
+            "id": tool_id,
+            "name": name or "tool",
+            "input_summary": "",
+            "output_summary": _summarize(output),
+            "ok": True if is_error is None else (not bool(is_error)),
+        }
+        if rec is not None:
+            tools = list(rec.get("tools") or [])
+            existing = next((t for t in tools if t.get("id") == tool_id), None)
+            if existing is not None:
+                existing["output_summary"] = card["output_summary"]
+                if is_error is not None:
+                    existing["ok"] = not bool(is_error)
+                if name:
+                    existing["name"] = name
+                card = existing
+            else:
+                tools.append(card)
+            rec["tools"] = tools
+        return rec, card
 
     def content_text(self) -> str:
         return "".join(self.text_parts)
 
     def assistant_message(self) -> dict[str, Any]:
+        # Ensure every parent tool card carries the latest nested subagent snapshot.
+        for parent_id, sub_id in self.parent_to_subagent.items():
+            card = self.tools_by_id.get(parent_id)
+            sub = self.subagents_by_id.get(sub_id)
+            if card is not None and sub is not None:
+                card["subagent"] = sub
         return {
             "id": str(uuid.uuid4()),
             "role": "assistant",
@@ -358,6 +575,131 @@ def _stream_event_text_delta(raw_event: Any) -> str | None:
     return text
 
 
+def _hook_payload(msg: HookEventMessage) -> dict[str, Any]:
+    """Normalize hook event payload from HookEventMessage.data."""
+    data = msg.data if isinstance(msg.data, dict) else {}
+    # Prefer nested input/payload if present; fall back to top-level keys.
+    for key in ("input", "hook_input", "payload"):
+        nested = data.get(key)
+        if isinstance(nested, dict):
+            merged = dict(nested)
+            # Keep outer agent ids if nested lacks them.
+            for k in ("agent_id", "agent_type", "parent_tool_use_id", "tool_use_id"):
+                if k not in merged and k in data:
+                    merged[k] = data[k]
+            return merged
+    return data
+
+
+def _map_subagent_text(
+    acc: TurnAccumulator | None,
+    *,
+    parent_tool_use_id: str | None,
+    text: str,
+    from_partial: bool = False,
+) -> list[dict[str, Any]]:
+    if not text:
+        return []
+    rec = None
+    if acc is not None:
+        rec = acc.add_subagent_text(
+            parent_tool_use_id,
+            text,
+            from_partial=from_partial,
+        )
+    sid = (rec or {}).get("id") or (
+        f"parent:{parent_tool_use_id}" if parent_tool_use_id else "subagent"
+    )
+    return [
+        {
+            "event": "subagent_text_delta",
+            "data": {
+                "id": sid,
+                "text": text,
+                "parent_tool_use_id": parent_tool_use_id,
+            },
+        }
+    ]
+
+
+def _map_subagent_tool_start(
+    acc: TurnAccumulator | None,
+    *,
+    parent_tool_use_id: str | None,
+    tool_id: str,
+    name: str,
+    input_data: Any,
+) -> list[dict[str, Any]]:
+    rec = None
+    card = {
+        "id": tool_id,
+        "name": name,
+        "input_summary": _summarize(input_data),
+        "output_summary": "",
+        "ok": True,
+    }
+    if acc is not None:
+        rec, card = acc.start_subagent_tool(
+            parent_tool_use_id,
+            tool_id,
+            name,
+            input_data,
+        )
+    sid = (rec or {}).get("id") or (
+        f"parent:{parent_tool_use_id}" if parent_tool_use_id else "subagent"
+    )
+    return [
+        {
+            "event": "subagent_tool_start",
+            "data": {
+                "id": sid,
+                "parent_tool_use_id": parent_tool_use_id,
+                "tool": card,
+            },
+        }
+    ]
+
+
+def _map_subagent_tool_end(
+    acc: TurnAccumulator | None,
+    *,
+    parent_tool_use_id: str | None,
+    tool_id: str,
+    output: Any = None,
+    is_error: bool | None = None,
+    name: str | None = None,
+) -> list[dict[str, Any]]:
+    rec = None
+    card = {
+        "id": tool_id,
+        "name": name or "tool",
+        "input_summary": "",
+        "output_summary": _summarize(output),
+        "ok": True if is_error is None else (not bool(is_error)),
+    }
+    if acc is not None:
+        rec, card = acc.end_subagent_tool(
+            parent_tool_use_id,
+            tool_id,
+            output=output,
+            is_error=is_error,
+            name=name,
+        )
+    sid = (rec or {}).get("id") or (
+        f"parent:{parent_tool_use_id}" if parent_tool_use_id else "subagent"
+    )
+    return [
+        {
+            "event": "subagent_tool_end",
+            "data": {
+                "id": sid,
+                "parent_tool_use_id": parent_tool_use_id,
+                "tool": card,
+            },
+        }
+    ]
+
+
 def map_sdk_message(
     msg: Any,
     acc: TurnAccumulator | None = None,
@@ -371,30 +713,127 @@ def map_sdk_message(
     """
     events: list[dict[str, Any]] = []
 
+    # Subagent lifecycle hooks (requires include_hook_events=True).
+    if isinstance(msg, HookEventMessage):
+        hook_name = (
+            getattr(msg, "hook_event_name", None)
+            or (msg.data or {}).get("hook_event")
+            or (msg.data or {}).get("hook_event_name")
+            or ""
+        )
+        payload = _hook_payload(msg)
+        agent_id = payload.get("agent_id") or payload.get("id")
+        agent_type = payload.get("agent_type") or payload.get("name")
+        parent_id = (
+            payload.get("parent_tool_use_id")
+            or payload.get("tool_use_id")
+            or payload.get("parent_tool_id")
+        )
+        if hook_name == "SubagentStart" and agent_id:
+            rec = None
+            if acc is not None:
+                rec = acc.ensure_subagent(
+                    subagent_id=str(agent_id),
+                    name=str(agent_type or "subagent"),
+                    agent_type=str(agent_type or "subagent"),
+                    parent_tool_use_id=str(parent_id) if parent_id else None,
+                    status="running",
+                )
+            events.append(
+                {
+                    "event": "subagent_start",
+                    "data": {
+                        "id": str(agent_id),
+                        "name": (rec or {}).get("name") or str(agent_type or "subagent"),
+                        "agent_type": (rec or {}).get("agent_type")
+                        or str(agent_type or "subagent"),
+                        "parent_tool_use_id": str(parent_id) if parent_id else None,
+                        "status": "running",
+                    },
+                }
+            )
+            return events
+        if hook_name == "SubagentStop" and agent_id:
+            status = "done"
+            if payload.get("is_error") or payload.get("error"):
+                status = "error"
+            summary = payload.get("summary") or payload.get("result")
+            if acc is not None:
+                rec = acc.ensure_subagent(
+                    subagent_id=str(agent_id),
+                    name=str(agent_type or "subagent"),
+                    agent_type=str(agent_type or "subagent"),
+                    parent_tool_use_id=str(parent_id) if parent_id else None,
+                    status=status,
+                )
+                if summary:
+                    rec["summary"] = _summarize(summary, limit=400)
+            events.append(
+                {
+                    "event": "subagent_done",
+                    "data": {
+                        "id": str(agent_id),
+                        "status": status,
+                        "summary": _summarize(summary, limit=400) if summary else None,
+                        "parent_tool_use_id": str(parent_id) if parent_id else None,
+                    },
+                }
+            )
+            return events
+        # Other hooks are ignored by the chat UI.
+        return events
+
     if isinstance(msg, StreamEvent):
         # Token-level partials (requires include_partial_messages=True).
         if acc is not None and msg.session_id and not acc.sdk_session_id:
             acc.sdk_session_id = msg.session_id
         text = _stream_event_text_delta(msg.event)
-        if text:
-            if acc is not None:
-                acc.add_text(text, from_partial=True)
-            events.append({"event": "text_delta", "data": {"text": text}})
+        if not text:
+            return events
+        parent_id = getattr(msg, "parent_tool_use_id", None)
+        if parent_id:
+            return _map_subagent_text(
+                acc,
+                parent_tool_use_id=str(parent_id),
+                text=text,
+                from_partial=True,
+            )
+        if acc is not None:
+            acc.add_text(text, from_partial=True)
+        events.append({"event": "text_delta", "data": {"text": text}})
         return events
 
     if isinstance(msg, AssistantMessage):
         content = msg.content or []
+        parent_id = getattr(msg, "parent_tool_use_id", None)
         # Final assistant message after partial stream: text was already
         # accumulated from StreamEvent deltas — do not double-count / re-emit.
-        skip_text = bool(acc is not None and acc.streamed_via_partial)
-        if skip_text and acc is not None:
-            # Reset so the next assistant message in this turn (after tools)
-            # can stream/accumulate cleanly.
-            acc.streamed_via_partial = False
+        if parent_id:
+            skip_text = bool(
+                acc is not None
+                and acc.subagent_streamed_partial.get(str(parent_id))
+            )
+            if skip_text and acc is not None:
+                acc.subagent_streamed_partial[str(parent_id)] = False
+        else:
+            skip_text = bool(acc is not None and acc.streamed_via_partial)
+            if skip_text and acc is not None:
+                # Reset so the next assistant message in this turn (after tools)
+                # can stream/accumulate cleanly.
+                acc.streamed_via_partial = False
         for block in content:
             if isinstance(block, TextBlock):
                 text = block.text or ""
                 if skip_text:
+                    continue
+                if parent_id:
+                    events.extend(
+                        _map_subagent_text(
+                            acc,
+                            parent_tool_use_id=str(parent_id),
+                            text=text,
+                        )
+                    )
                     continue
                 if acc is not None:
                     acc.add_text(text)
@@ -404,6 +843,17 @@ def map_sdk_message(
                 tool_id = block.id
                 name = block.name
                 input_data = block.input
+                if parent_id:
+                    events.extend(
+                        _map_subagent_tool_start(
+                            acc,
+                            parent_tool_use_id=str(parent_id),
+                            tool_id=tool_id,
+                            name=name,
+                            input_data=input_data,
+                        )
+                    )
+                    continue
                 if acc is not None:
                     acc.start_tool(tool_id, name, input_data)
                 events.append(
@@ -427,6 +877,17 @@ def map_sdk_message(
             elif isinstance(block, ToolResultBlock):
                 # Rare on assistant; still map for robustness
                 tool_id = block.tool_use_id
+                if parent_id:
+                    events.extend(
+                        _map_subagent_tool_end(
+                            acc,
+                            parent_tool_use_id=str(parent_id),
+                            tool_id=tool_id,
+                            output=block.content,
+                            is_error=block.is_error,
+                        )
+                    )
+                    continue
                 if acc is not None:
                     card = acc.end_tool(
                         tool_id,
@@ -466,6 +927,7 @@ def map_sdk_message(
 
     if isinstance(msg, UserMessage):
         content = msg.content
+        parent_id = getattr(msg, "parent_tool_use_id", None)
         blocks: Iterable[Any]
         if isinstance(content, str):
             return events
@@ -473,6 +935,17 @@ def map_sdk_message(
         for block in blocks:
             if isinstance(block, ToolResultBlock):
                 tool_id = block.tool_use_id
+                if parent_id:
+                    events.extend(
+                        _map_subagent_tool_end(
+                            acc,
+                            parent_tool_use_id=str(parent_id),
+                            tool_id=tool_id,
+                            output=block.content,
+                            is_error=block.is_error,
+                        )
+                    )
+                    continue
                 name = "tool"
                 if acc is not None:
                     card = acc.end_tool(
@@ -562,6 +1035,9 @@ def build_options(session: dict[str, Any]) -> ClaudeAgentOptions:
         # Emit token-level StreamEvent partials so the UI can type out text
         # instead of waiting for a whole AssistantMessage block.
         "include_partial_messages": True,
+        # Subagent lifecycle hooks → nested SSE cards in the chat UI.
+        "include_hook_events": True,
+        "agents": DEFAULT_SUBAGENTS,
     }
     resume = session.get("sdk_session_id")
     if resume:

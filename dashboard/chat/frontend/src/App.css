@@ -2238,6 +2238,97 @@ button.active-toggle {
   color: #7f1d1d;
 }
 
+.tool-subagent-wrap {
+  margin: 0.35rem 0.45rem 0.55rem;
+}
+
+.subagent-card {
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f8fbff 0%, #f1f7ff 100%);
+  overflow: hidden;
+}
+
+.subagent-card.status-running {
+  border-color: #7dd3fc;
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.08);
+}
+
+.subagent-card.status-error {
+  border-color: #fecaca;
+  background: linear-gradient(180deg, #fff7f7 0%, #fef2f2 100%);
+}
+
+.subagent-card.status-done {
+  border-color: #dbeafe;
+}
+
+.subagent-card-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.6rem;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: #0f172a;
+}
+
+.subagent-card-head:hover {
+  background: rgba(14, 165, 233, 0.05);
+}
+
+.subagent-icon {
+  width: 14px;
+  height: 14px;
+  color: #0284c7;
+  flex-shrink: 0;
+}
+
+.subagent-title {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.subagent-type {
+  font-size: 11px;
+  color: #64748b;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.15);
+}
+
+.subagent-inline-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.subagent-card-body {
+  border-top: 1px solid #e2e8f0;
+  padding: 0.55rem 0.65rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.subagent-pre {
+  max-height: 160px;
+}
+
+.subagent-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
 
 .tool-block-label {
   font-size: 10px;

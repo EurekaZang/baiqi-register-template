@@ -129,12 +129,26 @@ export type SessionSummary = {
   last_cost_usd?: number | null
 }
 
+export type SubAgentStatus = 'running' | 'done' | 'error' | string
+
+export type SubAgent = {
+  id: string
+  name: string
+  agent_type?: string
+  parent_tool_use_id?: string
+  status: SubAgentStatus
+  text?: string
+  tools?: ToolCard[]
+  summary?: string
+}
+
 export type ToolCard = {
   id: string
   name: string
   input_summary?: string
   output_summary?: string
   ok?: boolean
+  subagent?: SubAgent
 }
 
 export type AgentTaskStatus =

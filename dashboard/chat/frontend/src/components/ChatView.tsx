@@ -5,14 +5,17 @@ import {
   createSession,
   getSession,
   patchSession,
+  resolveSessionPath,
   stopSession,
   streamMessage,
   type AgentTask,
   type ContextUsage,
   type Message,
+  type PathAttachment,
   type SessionSummary,
   type ToolCard,
 } from '../api'
+import type { SendPayload } from './Composer'
 import { Boxes } from 'lucide-react'
 import { extractArtifacts, type Artifact } from '../lib/content'
 import { ArtifactsPanel } from './ArtifactsPanel'
@@ -278,7 +281,10 @@ export function ChatView({
     return !!id && viewSessionIdRef.current === id
   }
 
-  async function handleSend(text: string) {
+  async function handleSend(payload: SendPayload | string) {
+    const text = typeof payload === 'string' ? payload : payload.text
+    const attachments: PathAttachment[] =
+      typeof payload === 'string' ? [] : payload.attachments || []
     setError(null)
     let activeId = sessionId || activeIdRef.current
 
@@ -328,6 +334,7 @@ export function ChatView({
         id: `local-${Date.now()}`,
         role: 'user',
         content: text,
+        attachments: attachments.length ? attachments : undefined,
         created_at: new Date().toISOString(),
       }
       if (isViewingSession(streamId)) {
@@ -463,6 +470,7 @@ export function ChatView({
           }
         },
         ac.signal,
+        attachments,
       )
 
       const fresh = await getSession(streamId)
@@ -695,7 +703,7 @@ export function ChatView({
               onRetry={
                 isStreaming || loading
                   ? undefined
-                  : (userText) => void handleSend(userText)
+                  : (userText) => void handleSend({ text: userText, attachments: [] })
               }
               onOpenArtifact={handleOpenArtifact}
             />
@@ -709,12 +717,17 @@ export function ChatView({
           onStop={() => void handleStop()}
           seedText={seedText}
           onSeedConsumed={() => setSeedText(undefined)}
+          resolvePath={
+            !draftMode && sessionId
+              ? (path) => resolveSessionPath(sessionId, path)
+              : undefined
+          }
           hint={
             draftMode && !cwd.trim()
               ? 'Set an absolute cwd above before starting.'
               : running
                 ? 'Agent is running in Full auto mode.'
-                : undefined
+                : 'Attach project paths with Path (images under cwd are sent as vision).'
           }
           placeholder={
             draftMode

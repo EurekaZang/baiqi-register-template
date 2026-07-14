@@ -25,6 +25,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
+from .attachments import (
+    build_prompt_with_attachments,
+    normalize_path_attachments,
+    prompt_as_sdk_query,
+    public_attachments,
+)
 from .auth import require_token
 from .config import settings
 from .sessions import get_session, save_session
@@ -593,14 +599,21 @@ async def interrupt_session(session_id: str) -> bool:
     return True
 
 
-def append_user_message(session: dict[str, Any], content: str) -> dict[str, Any]:
+def append_user_message(
+    session: dict[str, Any],
+    content: str,
+    *,
+    attachments: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Persist a user message onto the session and return the message dict."""
-    msg = {
+    msg: dict[str, Any] = {
         "id": str(uuid.uuid4()),
         "role": "user",
         "content": content,
         "created_at": _now_iso(),
     }
+    if attachments:
+        msg["attachments"] = public_attachments(attachments)
     messages = list(session.get("messages") or [])
     messages.append(msg)
     session["messages"] = messages
@@ -653,6 +666,7 @@ async def run_agent_turn(
     session_id: str,
     user_text: str,
     *,
+    attachments: list[dict[str, Any]] | None = None,
     client_factory: Any | None = None,
     disconnect_check: Any | None = None,
 ) -> AsyncIterator[Any]:
@@ -664,6 +678,9 @@ async def run_agent_turn(
 
     ``disconnect_check`` is an optional async callable returning True when the
     HTTP client has disconnected (best-effort interrupt).
+
+    ``attachments`` is an optional list of path attachments under session cwd.
+    Images are embedded as multimodal content; other paths are listed for tools.
     """
     session = get_session(session_id)
     if session.get("status") == "running":
@@ -671,8 +688,20 @@ async def run_agent_turn(
         yield format_sse("done", {"sdk_session_id": session.get("sdk_session_id"), "usage": None})
         return
 
-    # Persist user message first
-    append_user_message(session, user_text)
+    cwd = str(session.get("cwd") or "")
+    try:
+        normalized_atts = normalize_path_attachments(cwd, attachments)
+    except HTTPException as exc:
+        # Surface validation errors as SSE so the UI stream path stays uniform.
+        detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+        yield format_sse("error", {"message": detail})
+        yield format_sse("done", {"sdk_session_id": session.get("sdk_session_id"), "usage": None})
+        return
+
+    prompt, public_atts = build_prompt_with_attachments(user_text, normalized_atts)
+
+    # Persist user message first (store original text + public attachment meta).
+    append_user_message(session, user_text, attachments=public_atts or None)
     session = set_session_status(session_id, "running")
     # Live mutable session for task list updates during the turn.
     if not isinstance(session.get("tasks"), list):
@@ -683,6 +712,7 @@ async def run_agent_turn(
         "cwd": session.get("cwd"),
         "model": session.get("model"),
         "tasks": list(session.get("tasks") or []),
+        "attachments": public_atts,
     }
     if isinstance(session.get("context_usage"), dict):
         meta["context_usage"] = session["context_usage"]
@@ -698,7 +728,10 @@ async def run_agent_turn(
     try:
         async with factory(options=options) as client:
             register_client(session_id, client)
-            await client.query(user_text)
+            if isinstance(prompt, str):
+                await client.query(prompt)
+            else:
+                await client.query(prompt_as_sdk_query(prompt))
             async for msg in client.receive_response():
                 if disconnect_check is not None:
                     try:
@@ -763,8 +796,18 @@ async def run_agent_turn(
         yield format_sse("done", _done_data())
 
 
+class PathAttachment(BaseModel):
+    type: str = "path"
+    path: str = Field(..., min_length=1)
+
+
 class PostMessageRequest(BaseModel):
-    content: str = Field(..., min_length=1)
+    content: str = Field(default="")
+    attachments: list[PathAttachment] | None = None
+
+
+class ResolvePathRequest(BaseModel):
+    path: str = Field(..., min_length=1)
 
 
 @router.post("/api/sessions/{session_id}/messages")
@@ -776,11 +819,14 @@ async def api_post_message(
     # Validate session exists before opening the stream
     get_session(session_id)
 
-    content = payload.content.strip()
-    if not content:
+    content = (payload.content or "").strip()
+    raw_atts = (
+        [a.model_dump() for a in payload.attachments] if payload.attachments else None
+    )
+    if not content and not raw_atts:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="content must not be empty",
+            detail="content or attachments required",
         )
 
     async def event_generator() -> AsyncIterator[Any]:
@@ -790,6 +836,7 @@ async def api_post_message(
         async for event in run_agent_turn(
             session_id,
             content,
+            attachments=raw_atts,
             disconnect_check=_disconnected,
         ):
             yield event
@@ -806,6 +853,24 @@ async def api_post_message(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/api/sessions/{session_id}/attachments/resolve")
+def api_resolve_attachment_path(
+    session_id: str,
+    payload: ResolvePathRequest,
+) -> dict[str, Any]:
+    """Validate a project path under the session cwd (for Composer chips)."""
+    session = get_session(session_id)
+    items = normalize_path_attachments(str(session.get("cwd") or ""), [
+        {"type": "path", "path": payload.path},
+    ])
+    if not items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="path could not be resolved",
+        )
+    return public_attachments(items)[0]
 
 
 @router.post("/api/sessions/{session_id}/stop")

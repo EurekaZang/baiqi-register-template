@@ -157,6 +157,15 @@ export type AgentTask = {
   provisional?: boolean
 }
 
+export type PathAttachment = {
+  type?: 'path' | string
+  path: string
+  name?: string
+  kind?: 'image' | 'text' | 'file' | string
+  mime?: string
+  size?: number
+}
+
 export type Message = {
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -165,6 +174,7 @@ export type Message = {
   created_at?: string
   /** compact_boundary | compact_summary | undefined */
   kind?: string
+  attachments?: PathAttachment[]
 }
 
 export type ModelItem = {
@@ -251,6 +261,16 @@ export async function compactSession(id: string): Promise<SessionSummary> {
 
 export type SseHandler = (event: string, data: Record<string, unknown>) => void
 
+export async function resolveSessionPath(
+  sessionId: string,
+  path: string,
+): Promise<PathAttachment> {
+  return apiFetch<PathAttachment>(`/sessions/${sessionId}/attachments/resolve`, {
+    method: 'POST',
+    body: JSON.stringify({ path }),
+  })
+}
+
 /**
  * POST messages and parse SSE via fetch ReadableStream (Bearer auth).
  * Returns AbortController for cancel; also call stopSession for server interrupt.
@@ -260,16 +280,24 @@ export async function streamMessage(
   content: string,
   onEvent: SseHandler,
   signal?: AbortSignal,
+  attachments?: PathAttachment[],
 ): Promise<void> {
   const url = `${apiBase()}/sessions/${sessionId}/messages`
   const headers = authHeaders({
     'Content-Type': 'application/json',
     Accept: 'text/event-stream',
   })
+  const body: Record<string, unknown> = { content }
+  if (attachments && attachments.length > 0) {
+    body.attachments = attachments.map((a) => ({
+      type: 'path',
+      path: a.path,
+    }))
+  }
   const res = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ content }),
+    body: JSON.stringify(body),
     signal,
   })
   if (!res.ok) throw await parseError(res)

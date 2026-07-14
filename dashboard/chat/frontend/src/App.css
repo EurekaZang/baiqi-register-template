@@ -2015,6 +2015,14 @@ button.active-toggle {
   padding: 0.15rem 0.15rem 0.1rem;
 }
 
+.composer-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .composer-hotkey {
   font-size: 11px;
 }
@@ -2022,6 +2030,88 @@ button.active-toggle {
 .composer-actions {
   display: flex;
   gap: 0.35rem;
+}
+
+.composer-attach-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.15rem 0.2rem 0.25rem;
+}
+
+.attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  padding: 0.2rem 0.35rem 0.2rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid #bae6fd;
+  background: #f0f9ff;
+  color: #0c4a6e;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.attach-chip-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attach-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #0369a1;
+  cursor: pointer;
+}
+
+.attach-chip-x:hover {
+  background: #e0f2fe;
+}
+
+.composer-path-add {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.2rem 0.35rem;
+}
+
+.composer-path-error {
+  margin: 0 0.25rem 0.25rem;
+  font-size: 11px;
+  color: #b91c1c;
+}
+
+.msg-attach-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+.msg-attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 1100px) {

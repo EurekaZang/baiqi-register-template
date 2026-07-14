@@ -4,7 +4,7 @@ import { Boxes, Copy, RotateCcw } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { Message, ToolCard } from '../api'
+import type { Message, PathAttachment, ToolCard } from '../api'
 import { extractArtifacts, extractReasoning, type Artifact } from '../lib/content'
 import { ReasoningBlock } from './ReasoningBlock'
 import { ToolCardView } from './ToolCard'
@@ -177,6 +177,19 @@ function MessageActions({
   )
 }
 
+function AttachmentChips({ items }: { items?: PathAttachment[] }) {
+  if (!items?.length) return null
+  return (
+    <div className="msg-attach-row">
+      {items.map((a) => (
+        <span key={a.path} className="msg-attach-chip" title={a.path}>
+          {a.kind === 'image' ? '🖼' : '📄'} {a.path}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function Bubble({
   id,
   role,
@@ -187,6 +200,7 @@ function Bubble({
   onRetry,
   onOpenArtifact,
   kind,
+  attachments,
 }: {
   id: string
   role: string
@@ -197,6 +211,7 @@ function Bubble({
   onRetry?: () => void
   onOpenArtifact?: (a: Artifact) => void
   kind?: string
+  attachments?: PathAttachment[]
 }) {
   const isUser = role === 'user'
   const isSystem = role === 'system' || kind === 'compact_boundary'
@@ -247,7 +262,10 @@ function Bubble({
         </CardHeader>
         <CardContent className={isUser ? 'p-3 pt-1' : 'px-1 py-1'}>
           {isUser ? (
-            <div className="user-text">{content}</div>
+            <>
+              <AttachmentChips items={attachments} />
+              {content ? <div className="user-text">{content}</div> : null}
+            </>
           ) : (
             <>
               {reasoning.map((r, idx) => (
@@ -394,6 +412,7 @@ export function MessageList({
             content={m.content}
             tools={m.tools}
             kind={m.kind}
+            attachments={m.attachments}
             onRetry={
               m.role === 'user' && onRetry
                 ? () => onRetry(m.content)

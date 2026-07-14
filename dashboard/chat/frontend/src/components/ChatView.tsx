@@ -282,6 +282,34 @@ export function ChatView({
     return !!id && viewSessionIdRef.current === id
   }
 
+  /** Ensure a real session exists so paste/drop can upload into cwd. */
+  const ensureSessionForUpload = useCallback(async (): Promise<string> => {
+    const existing = sessionId || activeIdRef.current
+    if (existing && !draftMode) return existing
+    if (!cwd.trim()) {
+      throw new Error('Working directory (cwd) is required before attaching files')
+    }
+    const created = await createSession({
+      cwd: cwd.trim(),
+      model: model || defaultModel,
+    })
+    activeIdRef.current = created.id
+    loadedIdRef.current = created.id
+    viewSessionIdRef.current = created.id
+    setSession(created)
+    setMessages(created.messages || [])
+    if (created.cwd) {
+      setCwd(created.cwd)
+      try {
+        localStorage.setItem('chat_last_cwd', created.cwd)
+      } catch {
+        /* ignore */
+      }
+    }
+    onSessionCreated(created)
+    return created.id
+  }, [sessionId, draftMode, cwd, model, defaultModel, onSessionCreated])
+
   async function handleSend(payload: SendPayload | string) {
     const text = typeof payload === 'string' ? payload : payload.text
     const attachments: PathAttachment[] =
@@ -300,29 +328,7 @@ export function ChatView({
 
     try {
       if (draftMode || !activeId) {
-        if (!cwd.trim()) {
-          setError('Working directory (cwd) is required')
-          return
-        }
-        const created = await createSession({
-          cwd: cwd.trim(),
-          model: model || defaultModel,
-        })
-        activeId = created.id
-        activeIdRef.current = created.id
-        loadedIdRef.current = created.id
-        viewSessionIdRef.current = created.id
-        setSession(created)
-        setMessages(created.messages || [])
-        if (created.cwd) {
-          setCwd(created.cwd)
-          try {
-            localStorage.setItem('chat_last_cwd', created.cwd)
-          } catch {
-            /* ignore */
-          }
-        }
-        onSessionCreated(created)
+        activeId = await ensureSessionForUpload()
       } else {
         activeIdRef.current = activeId
       }
@@ -719,13 +725,19 @@ export function ChatView({
           seedText={seedText}
           onSeedConsumed={() => setSeedText(undefined)}
           resolvePath={
-            !draftMode && sessionId
-              ? (path) => resolveSessionPath(sessionId, path)
+            cwd.trim()
+              ? async (path) => {
+                  const id = await ensureSessionForUpload()
+                  return resolveSessionPath(id, path)
+                }
               : undefined
           }
           uploadFile={
-            !draftMode && sessionId
-              ? (file) => uploadSessionFile(sessionId, file)
+            cwd.trim()
+              ? async (file) => {
+                  const id = await ensureSessionForUpload()
+                  return uploadSessionFile(id, file)
+                }
               : undefined
           }
           hint={
@@ -733,14 +745,14 @@ export function ChatView({
               ? 'Set an absolute cwd above before starting.'
               : running
                 ? 'Agent is running in Full auto mode.'
-                : 'Drop files here, or use Path / Upload (saved under .chat-attachments/).'
+                : 'Paste image (Ctrl+V), drop files, or Path / Upload → .chat-attachments/.'
           }
           placeholder={
             draftMode
               ? cwd.trim()
-                ? 'Describe a coding task…'
+                ? 'Describe a task… or paste a screenshot'
                 : 'Set cwd above, then message…'
-              : 'Message the agent…'
+              : 'Message the agent… (paste image ok)'
           }
         />
       </div>

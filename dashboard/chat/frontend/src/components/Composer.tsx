@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ClipboardEvent,
   type DragEvent,
   type FormEvent,
   type KeyboardEvent,
@@ -54,6 +55,61 @@ function shortName(path: string): string {
 function kindIcon(kind?: string) {
   if (kind === 'image') return <ImageIcon className="h-3.5 w-3.5 text-sky-600" />
   return <FileText className="h-3.5 w-3.5 text-slate-500" />
+}
+
+function extForMime(mime: string): string {
+  const m = (mime || '').toLowerCase()
+  if (m.includes('jpeg') || m.includes('jpg')) return 'jpg'
+  if (m.includes('webp')) return 'webp'
+  if (m.includes('gif')) return 'gif'
+  if (m.includes('png')) return 'png'
+  return 'png'
+}
+
+/** Collect image files from a paste event (screenshots + copied image files). */
+function imagesFromClipboard(e: ClipboardEvent): File[] {
+  const out: File[] = []
+  const cd = e.clipboardData
+  if (!cd) return out
+
+  // 1) Explicit file list (copied files from file manager)
+  if (cd.files && cd.files.length > 0) {
+    for (const f of Array.from(cd.files)) {
+      if (f.type.startsWith('image/')) out.push(f)
+    }
+  }
+
+  // 2) ClipboardItem blobs (OS screenshot / browser copy image)
+  if (cd.items && cd.items.length > 0) {
+    for (const item of Array.from(cd.items)) {
+      if (item.kind !== 'file') continue
+      if (!item.type.startsWith('image/')) continue
+      const blob = item.getAsFile()
+      if (!blob) continue
+      // Avoid duplicates when both files + items expose the same image.
+      const already = out.some(
+        (f) => f.size === blob.size && f.type === blob.type && f.name === blob.name,
+      )
+      if (already) continue
+      if (blob.name && blob.name !== 'image.png' && blob.name !== 'blob') {
+        out.push(blob)
+      } else {
+        const ext = extForMime(blob.type || 'image/png')
+        const stamp = new Date()
+          .toISOString()
+          .replace(/[:.]/g, '-')
+          .replace('T', '_')
+          .slice(0, 19)
+        out.push(
+          new File([blob], `paste-${stamp}.${ext}`, {
+            type: blob.type || 'image/png',
+            lastModified: Date.now(),
+          }),
+        )
+      }
+    }
+  }
+  return out
 }
 
 export function Composer({
@@ -162,7 +218,7 @@ export function Composer({
     const files = Array.from(fileList as ArrayLike<File>)
     if (!files.length) return
     if (!uploadFile) {
-      setPathError('Create/open a session first, then drop files (needs cwd).')
+      setPathError('Set cwd and open/create a chat first, then paste or drop files.')
       return
     }
     setUploadBusy(true)
@@ -184,6 +240,17 @@ export function Composer({
       if (fileRef.current) fileRef.current.value = ''
     }
     if (errors.length) setPathError(errors.slice(0, 3).join(' · '))
+  }
+
+  function onPaste(e: ClipboardEvent) {
+    if (disabled || streaming || uploadBusy) return
+    const images = imagesFromClipboard(e)
+    if (!images.length) return
+    // Keep text paste behavior when clipboard is text-only; for images
+    // swallow default so binary/placeholder text doesn't enter the box.
+    e.preventDefault()
+    e.stopPropagation()
+    void handleFiles(images)
   }
 
   function onDragEnter(e: DragEvent) {
@@ -250,6 +317,7 @@ export function Composer({
       onDragLeave={onDragLeave}
       onDragOver={onDragOver}
       onDrop={onDrop}
+      onPaste={onPaste}
     >
       {hint ? <div className="composer-hint muted">{hint}</div> : null}
       {dragOver ? (
@@ -342,6 +410,7 @@ export function Composer({
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
             placeholder={placeholder}
             rows={1}
             disabled={disabled}
@@ -365,7 +434,7 @@ export function Composer({
               <Tooltip
                 content={
                   uploadFile
-                    ? 'Upload files into .chat-attachments/ under cwd (or drag & drop)'
+                    ? 'Upload files into .chat-attachments/ under cwd (or drag & drop / paste image)'
                     : 'Open/create a session with cwd first'
                 }
               >
@@ -385,12 +454,13 @@ export function Composer({
                 ref={fileRef}
                 type="file"
                 multiple
+                accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.json,.py,.ts,.tsx,.js,.jsx,.css,.html,.log,.pdf"
                 className="sr-only"
                 disabled={disabled || streaming || !uploadFile}
                 onChange={(e) => void handleFiles(e.target.files)}
               />
               <span className="composer-hotkey muted">
-                Enter send · drop files · Path / Upload
+                Enter send · paste image · drop files
               </span>
             </div>
             <div className="composer-actions">

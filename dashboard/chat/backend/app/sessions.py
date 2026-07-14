@@ -252,8 +252,17 @@ def update_session(
         touch_recent_cwd(session["cwd"])
         changed = True
     if model is not None:
-        session["model"] = model
-        changed = True
+        next_model = (model or "").strip() or settings.chat_default_model
+        prev_model = session.get("model") or settings.chat_default_model
+        if next_model != prev_model:
+            session["model"] = next_model
+            # Drop resume handle so the next turn starts a fresh SDK session
+            # under the newly selected model (resume would pin the old model).
+            session["sdk_session_id"] = None
+            changed = True
+        elif session.get("model") != next_model:
+            session["model"] = next_model
+            changed = True
     if pinned is not None:
         session["pinned"] = bool(pinned)
         changed = True

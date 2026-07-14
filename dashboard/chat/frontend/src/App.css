@@ -527,6 +527,11 @@ textarea {
   min-width: 0;
 }
 
+.model-select-host {
+  display: inline-flex;
+  min-width: 0;
+}
+
 .header-right {
   display: flex;
   align-items: center;

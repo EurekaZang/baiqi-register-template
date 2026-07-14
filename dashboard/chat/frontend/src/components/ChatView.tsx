@@ -233,6 +233,7 @@ export function ChatView({
       try {
         const updated = await patchSession(sessionId, next)
         setSession(updated)
+        if (updated.model) setModel(updated.model)
         if (updated.cwd) {
           setCwd(updated.cwd)
           try {
@@ -589,15 +590,27 @@ export function ChatView({
                 onCommit={handleCwdCommit}
                 disabled={running}
               />
-              <ModelSelect
-                value={headerModel}
-                onChange={(v) => {
-                  setModel(v)
-                  if (!draftMode && sessionId) void applyModelCwd({ model: v })
-                }}
-                disabled={running}
-                compact
-              />
+              <Tooltip
+                content={
+                  running
+                    ? 'Wait for the current turn to finish, then change model'
+                    : session?.sdk_session_id
+                      ? 'Applies to the next message (starts a fresh model session)'
+                      : 'Model for the next agent turn'
+                }
+              >
+                <div className="model-select-host">
+                  <ModelSelect
+                    value={headerModel}
+                    onChange={(v) => {
+                      setModel(v)
+                      if (!draftMode && sessionId) void applyModelCwd({ model: v })
+                    }}
+                    disabled={running}
+                    compact
+                  />
+                </div>
+              </Tooltip>
             </div>
           </div>
           <div className="header-right">

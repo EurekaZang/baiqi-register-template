@@ -256,6 +256,49 @@ def test_patch_rejects_cwd_and_model_while_running(monkeypatch, tmp_path):
     assert r_title.json()["title"] == "Still ok"
 
 
+def test_patch_model_when_idle_clears_sdk_session(monkeypatch, tmp_path):
+    c = _client(monkeypatch, tmp_path)
+    cwd = tmp_path / "proj"
+    cwd.mkdir()
+
+    created = c.post(
+        "/api/sessions",
+        headers=_auth_headers(),
+        json={"cwd": str(cwd), "model": "grok-4.5"},
+    )
+    assert created.status_code == 200
+    sid = created.json()["id"]
+
+    from app import sessions as sessions_mod
+
+    session = sessions_mod.get_session(sid)
+    session["sdk_session_id"] = "sdk-old-model"
+    session["status"] = "idle"
+    sessions_mod.save_session(session)
+
+    patched = c.patch(
+        f"/api/sessions/{sid}",
+        headers=_auth_headers(),
+        json={"model": "other-model"},
+    )
+    assert patched.status_code == 200
+    body = patched.json()
+    assert body["model"] == "other-model"
+    assert body["sdk_session_id"] is None
+
+    # same model → keep resume id
+    session = sessions_mod.get_session(sid)
+    session["sdk_session_id"] = "sdk-same"
+    sessions_mod.save_session(session)
+    same = c.patch(
+        f"/api/sessions/{sid}",
+        headers=_auth_headers(),
+        json={"model": "other-model"},
+    )
+    assert same.status_code == 200
+    assert same.json()["sdk_session_id"] == "sdk-same"
+
+
 def test_sessions_routes_require_auth(monkeypatch, tmp_path):
     c = _client(monkeypatch, tmp_path)
     assert c.get("/api/sessions").status_code == 401

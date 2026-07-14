@@ -10,7 +10,8 @@ Toggle **Chat | Image** in the composer. Image mode calls grok2api (not the Agen
 
 - `POST /api/sessions/{id}/images` → `http://127.0.0.1:8000/v1/images/generations`
 - Model: **`grok-imagine-image-lite`** (configurable)
-- Assistant message content: markdown `![image](cdn-url)` (upstream URL; CDN may 403 without cookies)
+- Assistant message content: markdown `![image](/chat/api/sessions/{id}/generated/{file}.jpg)` (local store; CDN URLs 403 without cookies)
+- Bytes from grok2api `b64_json`, saved under `dashboard/chat/data/generated-images/`
 
 Requires **grok2api** on `:8000` in addition to model_router / chat-service / dashboard.
 

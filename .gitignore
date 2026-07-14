@@ -18,3 +18,6 @@ dashboard/chat/data/sessions/*
 dashboard/chat/.env
 # Drag/drop uploads land under session cwd
 **/.chat-attachments/
+
+# chat generated images (local b64 store)
+dashboard/chat/data/generated-images/

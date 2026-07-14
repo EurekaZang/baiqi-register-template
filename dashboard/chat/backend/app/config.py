@@ -25,5 +25,7 @@ class Settings(BaseSettings):
     chat_grok2api_api_key: str = ""
     chat_image_timeout_sec: float = 120.0
     chat_image_n: int = 1
+    # Persist generated images locally (CDN URLs are often 403 without cookies)
+    chat_generated_images_dir: Path = CHAT_ROOT / "data" / "generated-images"
 
 settings = Settings()

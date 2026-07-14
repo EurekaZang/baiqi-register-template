@@ -1,13 +1,15 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
-import { Boxes, Copy, RotateCcw } from 'lucide-react'
+import { Boxes, ChevronDown, ChevronRight, Copy, RotateCcw, Wrench } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Message, PathAttachment, ToolCard } from '../api'
 import { extractArtifacts, extractReasoning, type Artifact } from '../lib/content'
+import { AuthImage } from './AuthImage'
 import { ReasoningBlock } from './ReasoningBlock'
-import { ToolCardView } from './ToolCard'
+import { statusOf, ToolCardView } from './ToolCard'
+import { cn } from '../lib/utils'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import {
@@ -52,13 +54,104 @@ function ToolCards({
   tools: ToolCard[]
   runningIds?: Set<string>
 }) {
-  const [parent] = useAutoAnimate({ duration: 180, easing: 'ease-out' })
-  if (!tools?.length) return null
+  const [parent] = useAutoAnimate({ duration: 160, easing: 'ease-out' })
+  const [expanded, setExpanded] = useState(false)
+
+  const items = useMemo(() => {
+    return (tools || []).map((t) => ({
+      tool: t,
+      running: !!runningIds?.has(t.id),
+      status: statusOf(t, runningIds?.has(t.id)),
+    }))
+  }, [tools, runningIds])
+
+  if (!items.length) return null
+
+  const failedCount = items.filter((i) => i.status === 'error').length
+  const runningCount = items.filter((i) => i.status === 'running').length
+  const doneCount = items.filter((i) => i.status === 'done').length
+  // Collapse long successful trails by default; keep failures/running visible.
+  const shouldCollapse = doneCount >= 2 && items.length >= 3
+  const collapsedCount = shouldCollapse && !expanded ? doneCount : 0
+  const visible = items.filter((i) => {
+    if (!shouldCollapse || expanded) return true
+    return i.status !== 'done'
+  })
+
+  const summaryBits: string[] = []
+  if (doneCount) summaryBits.push(`${doneCount} done`)
+  if (failedCount) summaryBits.push(`${failedCount} failed`)
+  if (runningCount) summaryBits.push(`${runningCount} running`)
+
+  // Compact name strip for the group header (e.g. Read · Bash · Edit)
+  const nameStrip = (() => {
+    const names: string[] = []
+    const seen = new Set<string>()
+    for (const i of items) {
+      const n = i.tool.name || 'tool'
+      if (seen.has(n)) continue
+      seen.add(n)
+      names.push(n)
+      if (names.length >= 5) break
+    }
+    if (names.length === 1 && items.length > 1) return `${names[0]} ×${items.length}`
+    const uniqueTotal = new Set(items.map((i) => i.tool.name || 'tool')).size
+    const hiddenUnique = Math.max(0, uniqueTotal - names.length)
+    return names.join(' · ') + (hiddenUnique > 0 ? ` +${hiddenUnique}` : '')
+  })()
+
   return (
-    <div className="tool-cards" ref={parent}>
-      {tools.map((t) => (
-        <ToolCardView key={t.id} tool={t} running={runningIds?.has(t.id)} />
+    <div className={cn('tool-cards', shouldCollapse && 'is-grouped')} ref={parent}>
+      {shouldCollapse ? (
+        <button
+          type="button"
+          className={cn('tool-group-bar', expanded && 'is-open')}
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+        >
+          <Wrench className="tool-group-icon" aria-hidden />
+          <span className="tool-group-title">
+            {items.length} tools
+            <span className="tool-group-names">{nameStrip}</span>
+          </span>
+          <span className="tool-group-meta">{summaryBits.join(' · ')}</span>
+          {expanded ? (
+            <ChevronDown className="tool-chevron-icon" aria-hidden />
+          ) : (
+            <ChevronRight className="tool-chevron-icon" aria-hidden />
+          )}
+        </button>
+      ) : null}
+
+      {visible.map(({ tool, running }) => (
+        <ToolCardView
+          key={tool.id}
+          tool={tool}
+          running={running}
+          dense
+          defaultOpen={false}
+        />
       ))}
+
+      {collapsedCount > 0 ? (
+        <button
+          type="button"
+          className="tool-group-more"
+          onClick={() => setExpanded(true)}
+        >
+          Show {collapsedCount} successful step{collapsedCount === 1 ? '' : 's'}
+        </button>
+      ) : null}
+
+      {shouldCollapse && expanded && doneCount > 0 ? (
+        <button
+          type="button"
+          className="tool-group-more is-collapse"
+          onClick={() => setExpanded(false)}
+        >
+          Hide successful steps
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -273,7 +366,18 @@ function Bubble({
               ))}
               <ToolCards tools={tools || []} runningIds={runningToolIds} />
               <div className="md">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    img: ({ src, alt, title }) => (
+                      <AuthImage
+                        src={typeof src === 'string' ? src : undefined}
+                        alt={alt}
+                        title={title}
+                      />
+                    ),
+                  }}
+                >
                   {rest || (streaming ? '' : '')}
                 </ReactMarkdown>
                 {streaming && <span className="cursor" aria-hidden />}

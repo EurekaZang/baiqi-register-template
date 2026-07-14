@@ -561,6 +561,18 @@ textarea {
   flex: 0 0 auto;
 }
 
+/* shadcn SelectTrigger — match 32px header pill height */
+.model-select-trigger {
+  height: 32px !important;
+}
+
+.model-select-content [data-slot='select-label'] {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 /* Context window meter (header chip + breakdown popover) */
 .ctx-meter-wrap {
   position: relative;
@@ -811,9 +823,8 @@ textarea {
   min-width: 0;
 }
 
-/* Shared field label look for cwd + model in the toolbar */
-.header-toolbar .field.inline > span,
-.header-toolbar .model-select .model-label {
+/* Shared field label look for cwd in the toolbar */
+.header-toolbar .field.inline > span {
   flex-shrink: 0;
   font-size: 10px;
   font-weight: 700;
@@ -897,24 +908,13 @@ textarea {
 
 .model-select {
   min-width: 0;
-}
-
-.model-select.compact {
-  display: flex;
-  flex-direction: row;
+  display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  min-width: 0;
   margin: 0;
 }
 
-.model-select .model-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  line-height: 1;
+.model-select.compact {
+  gap: 0;
 }
 
 .model-control {
@@ -922,17 +922,6 @@ textarea {
   align-items: center;
   gap: 0.35rem;
   min-width: 0;
-}
-
-.model-select select,
-.model-select-input {
-  min-width: 148px;
-  width: auto;
-  height: 32px !important;
-  font-family: var(--mono);
-  font-size: 12px !important;
-  border-radius: 999px !important;
-  padding-inline: 0.75rem !important;
 }
 
 /* Keep compact actions the same pill height as chips */
@@ -981,15 +970,10 @@ textarea {
     width: 100%;
   }
 
-  .model-select.compact {
+  .model-select,
+  .model-select-trigger {
     width: 100%;
-  }
-
-  .model-select select,
-  .model-select-input {
-    flex: 1;
-    min-width: 0;
-    width: 100%;
+    max-width: none;
   }
 }
 

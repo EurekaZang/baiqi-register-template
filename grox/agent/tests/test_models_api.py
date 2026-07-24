@@ -45,6 +45,7 @@ class _FakeAsyncClient:
 
     next_response: _FakeResponse | Exception | None = None
     calls: list[str] = []
+    last_headers: dict[str, str] | None = None
 
     def __init__(self, *args, **kwargs):
         pass
@@ -55,8 +56,13 @@ class _FakeAsyncClient:
     async def __aexit__(self, exc_type, exc, tb):
         return False
 
-    async def get(self, url: str):
+    async def get(self, url: str, **kwargs):
         type(self).calls.append(url)
+        headers = kwargs.get("headers")
+        if headers is None:
+            type(self).last_headers = None
+        else:
+            type(self).last_headers = dict(headers)
         result = type(self).next_response
         if isinstance(result, Exception):
             raise result
@@ -69,16 +75,46 @@ class _FakeAsyncClient:
 def _reset_fake_client():
     _FakeAsyncClient.next_response = None
     _FakeAsyncClient.calls = []
+    _FakeAsyncClient.last_headers = None
     models_api.clear_models_cache()
     yield
     models_api.clear_models_cache()
     _FakeAsyncClient.next_response = None
     _FakeAsyncClient.calls = []
+    _FakeAsyncClient.last_headers = None
 
 
 def test_models_requires_auth(monkeypatch):
     c = _client(monkeypatch)
     assert c.get("/api/models").status_code == 401
+
+
+def test_models_sends_bearer_when_api_key_set(monkeypatch):
+    c = _client(monkeypatch)
+    monkeypatch.setattr(settings, "anthropic_api_key", "sk-test-key")
+    monkeypatch.setattr(models_api.httpx, "AsyncClient", _FakeAsyncClient)
+    _FakeAsyncClient.next_response = _FakeResponse(
+        {"data": [{"id": "grok-4.5", "display_name": "Grok"}]}
+    )
+
+    r = c.get("/api/models", headers=_auth_headers())
+    assert r.status_code == 200
+    assert _FakeAsyncClient.last_headers is not None
+    assert _FakeAsyncClient.last_headers.get("Authorization") == "Bearer sk-test-key"
+    assert _FakeAsyncClient.last_headers.get("x-api-key") == "sk-test-key"
+
+
+def test_models_omits_auth_headers_without_api_key(monkeypatch):
+    c = _client(monkeypatch)
+    monkeypatch.setattr(settings, "anthropic_api_key", "")
+    monkeypatch.setattr(models_api.httpx, "AsyncClient", _FakeAsyncClient)
+    _FakeAsyncClient.next_response = _FakeResponse(
+        {"data": [{"id": "grok-4.5"}]}
+    )
+
+    r = c.get("/api/models", headers=_auth_headers())
+    assert r.status_code == 200
+    assert _FakeAsyncClient.last_headers is None
 
 
 def test_models_normalizes_and_sets_default(monkeypatch):

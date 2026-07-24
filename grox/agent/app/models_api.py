@@ -64,8 +64,14 @@ def normalize_models_response(raw: Any, *, stale: bool = False) -> dict[str, Any
 
 async def fetch_models_from_router() -> dict[str, Any]:
     url = f"{settings.chat_model_router_url.rstrip('/')}/v1/models"
+    headers: dict[str, str] = {}
+    # Public grokapi / many OpenAI-compatible routers require Bearer (or x-api-key).
+    key = (settings.anthropic_api_key or "").strip()
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+        headers["x-api-key"] = key
     async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(url)
+        response = await client.get(url, headers=headers or None)
         response.raise_for_status()
         return response.json()
 

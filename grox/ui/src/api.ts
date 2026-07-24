@@ -2,10 +2,26 @@
 
 const TOKEN_KEY = 'chat_token'
 
+export type GroxBridge = {
+  /** Origin string, e.g. http://127.0.0.1:17890 — NOT a function. */
+  apiBase?: string
+  /** Local chat token string, or async getter for older bridges. */
+  token?: string | (() => Promise<string | null | undefined>)
+  selectFolder?: () => Promise<string | null>
+  openDataDir?: () => void | Promise<void>
+  getVersion?: () => Promise<string>
+}
+
+export function getGroxBridge(): GroxBridge | undefined {
+  return (window as unknown as { grox?: GroxBridge }).grox
+}
+
 /** API root: Electron may inject `window.grox.apiBase`; else Vite BASE_URL + `api`. */
 export function apiBase(): string {
-  const w = window as unknown as { grox?: { apiBase?: string } }
-  if (w.grox?.apiBase) return w.grox.apiBase.replace(/\/?$/, '') + '/api'
+  const w = getGroxBridge()
+  if (w?.apiBase && typeof w.apiBase === 'string') {
+    return w.apiBase.replace(/\/?$/, '') + '/api'
+  }
   const base = import.meta.env.BASE_URL || '/'
   return `${base.replace(/\/?$/, '/')}api`
 }
@@ -38,6 +54,27 @@ export function setToken(token: string | null): void {
 
 export function clearToken(): void {
   setToken(null)
+}
+
+/**
+ * Desktop: pull local loopback token from Electron preload bridge.
+ * `window.grox.apiBase` is a plain string origin (not a function).
+ * `window.grox.token` is preferably a string; async getter still supported.
+ */
+export async function initDesktopAuth(): Promise<void> {
+  const g = getGroxBridge()
+  if (!g) return
+  let token: string | null | undefined
+  if (typeof g.token === 'function') {
+    try {
+      token = await g.token()
+    } catch {
+      return
+    }
+  } else if (typeof g.token === 'string') {
+    token = g.token
+  }
+  if (token) setToken(token)
 }
 
 function authHeaders(extra?: HeadersInit): Headers {

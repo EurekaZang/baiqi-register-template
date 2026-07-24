@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FolderOpen, History } from 'lucide-react'
-import { recentCwds } from '../api'
+import { getGroxBridge, recentCwds } from '../api'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { NativeSelect } from './ui/native-select'
@@ -21,9 +21,17 @@ type Props = {
 function normalizeCwdClient(raw: string): string {
   let text = raw.trim()
   if (!text) return ''
+  // Keep Windows drive paths usable after slash-normalization (C:/Users/...).
   text = text.replace(/\\/g, '/')
-  while (text.includes('//')) text = text.replaceAll('//', '/')
-  if (text.length > 1) text = text.replace(/\/+$/, '')
+  // Collapse duplicate slashes but preserve leading // for UNC.
+  if (text.startsWith('//')) {
+    text = '//' + text.slice(2).replace(/\/{2,}/g, '/')
+  } else {
+    while (text.includes('//')) text = text.replaceAll('//', '/')
+  }
+  if (text.length > 1 && !/^([A-Za-z]:\/)$/.test(text)) {
+    text = text.replace(/\/+$/, '')
+  }
   return text
 }
 
@@ -32,6 +40,17 @@ function shortPath(path: string): string {
   const parts = path.replace(/\/+$/, '').split('/').filter(Boolean)
   if (parts.length <= 3) return path
   return `…/${parts.slice(-3).join('/')}`
+}
+
+function isAbsolutePath(path: string): boolean {
+  if (!path) return false
+  if (path === '~' || path.startsWith('~/')) return true
+  if (path.startsWith('/')) return true
+  // Windows drive letter
+  if (/^[A-Za-z]:(\/|$)/.test(path)) return true
+  // UNC
+  if (path.startsWith('//')) return true
+  return false
 }
 
 export function CwdPicker({
@@ -45,6 +64,8 @@ export function CwdPicker({
   const [recent, setRecent] = useState<string[]>([])
   const [draft, setDraft] = useState(value)
   const [error, setError] = useState<string | null>(null)
+  const [picking, setPicking] = useState(false)
+  const hasDesktopPicker = Boolean(getGroxBridge()?.selectFolder)
 
   useEffect(() => {
     setDraft(value)
@@ -80,8 +101,8 @@ export function CwdPicker({
   function validateLocal(path: string): string | null {
     const n = normalizeCwdClient(path)
     if (!n) return 'cwd is required'
-    if (!(n.startsWith('/') || n === '~' || n.startsWith('~/'))) {
-      return 'Use an absolute path (/…) or ~/'
+    if (!isAbsolutePath(n)) {
+      return 'Use an absolute path (/…, C:/…, or ~/…)'
     }
     return null
   }
@@ -93,6 +114,23 @@ export function CwdPicker({
     if (err) return
     onChange(next)
     onCommit?.(next)
+  }
+
+  async function pickFolder() {
+    const selectFolder = getGroxBridge()?.selectFolder
+    if (!selectFolder) return
+    setPicking(true)
+    setError(null)
+    try {
+      const chosen = await selectFolder()
+      if (!chosen) return
+      setDraft(chosen)
+      commit(chosen)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not open folder picker')
+    } finally {
+      setPicking(false)
+    }
   }
 
   return (
@@ -119,7 +157,11 @@ export function CwdPicker({
                 ;(e.target as HTMLInputElement).blur()
               }
             }}
-            placeholder="/absolute/path or ~/project"
+            placeholder={
+              hasDesktopPicker
+                ? 'Browse or type absolute path'
+                : '/absolute/path or ~/project'
+            }
             disabled={disabled}
             list="recent-cwds"
             spellCheck={false}
@@ -132,6 +174,19 @@ export function CwdPicker({
           />
         </div>
       </label>
+
+      {hasDesktopPicker ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 shrink-0 px-2 text-xs"
+          disabled={disabled || picking}
+          onClick={() => void pickFolder()}
+        >
+          Browse…
+        </Button>
+      ) : null}
 
       <datalist id="recent-cwds">
         {options.map((c) => (

@@ -468,10 +468,10 @@ export function MessageList({
           <Card className="empty-card mx-auto max-w-[560px] text-left shadow-md">
             <CardHeader>
               <CardDescription className="empty-kicker text-[11px] font-semibold uppercase tracking-[0.1em] text-sky-600">
-                8090 Agent
+                Grox
               </CardDescription>
               <CardTitle className="empty-title text-xl tracking-tight">
-                What should we work on?
+                Select a folder and ask Grox to work
               </CardTitle>
             </CardHeader>
             <CardContent>

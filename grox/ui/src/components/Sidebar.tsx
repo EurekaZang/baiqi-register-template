@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { LogOut, Pin, PinOff, Pencil, Trash2, X } from 'lucide-react'
+import { Pin, PinOff, Pencil, Settings, Trash2, X } from 'lucide-react'
 import type { SessionSummary } from '../api'
 import { groupSessionsByDay } from '../lib/content'
 import { cn } from '../lib/utils'
@@ -16,7 +16,7 @@ type Props = {
   onDelete: (id: string) => void
   onRename: (id: string, title: string) => void
   onTogglePin: (id: string, pinned: boolean) => void
-  onLogout: () => void
+  onOpenSettings?: () => void
   /** docked = desktop flex child; drawer = off-canvas */
   variant?: 'docked' | 'drawer'
   open?: boolean
@@ -48,7 +48,7 @@ export function Sidebar({
   onDelete,
   onRename,
   onTogglePin,
-  onLogout,
+  onOpenSettings,
   variant = 'docked',
   open = true,
   onClose,
@@ -95,11 +95,6 @@ export function Sidebar({
     onClose?.()
   }
 
-  function logoutAndClose() {
-    onLogout()
-    onClose?.()
-  }
-
   useEffect(() => {
     if (variant !== 'drawer' || !open) return
     const onKey = (e: KeyboardEvent) => {
@@ -142,8 +137,8 @@ export function Sidebar({
     >
       <div className="sidebar-brand">
         <div className="sidebar-brand-row">
-          <a href="/" className="brand-link" title="Back to dashboard">
-            <span className="brand-accent">8090</span> Chat
+          <a href="/" className="brand-link" title="Grox home">
+            <span className="brand-accent">Grox</span>
           </a>
           {variant === 'drawer' ? (
             <Button
@@ -281,10 +276,17 @@ export function Sidebar({
             ? ` · ${sessions.filter((s) => s.pinned).length} pinned`
             : ''}
         </div>
-        <Tooltip content="Clear local token and return to login">
-          <Button variant="ghost" className="w-full justify-start" onClick={logoutAndClose}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Log out
+        <Tooltip content="API and workspace settings">
+          <Button
+            variant="ghost"
+            className="w-full justify-start"
+            onClick={() => {
+              onOpenSettings?.()
+              onClose?.()
+            }}
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Settings
           </Button>
         </Tooltip>
       </div>

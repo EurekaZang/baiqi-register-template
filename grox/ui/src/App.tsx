@@ -1,28 +1,47 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  clearToken,
   getToken,
   listSessions,
   deleteSession,
   patchSession,
+  setToken,
   type SessionSummary,
 } from './api'
 import { ChatView } from './components/ChatView'
-import { Login } from './components/Login'
+import { Onboarding } from './components/Onboarding'
+import { SettingsModal } from './components/SettingsModal'
 import { Sidebar } from './components/Sidebar'
 import { cn } from './lib/utils'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { useVisualViewportLock } from './lib/useVisualViewportLock'
 import './App.css'
+import './styles/grox-theme.css'
 
-type AuthState = 'checking' | 'need-login' | 'ok'
+const LOCAL_TOKEN = 'grox-local-token'
+
+function needsOnboarding(): boolean {
+  try {
+    const onboarded = localStorage.getItem('grox_onboarded') === '1'
+    const apiKey = (localStorage.getItem('grox_api_key') || '').trim()
+    return !onboarded || !apiKey
+  } catch {
+    return true
+  }
+}
+
+/** Desktop / dev: always use local token — no login gate. */
+function ensureLocalToken(): void {
+  if (!getToken()) setToken(LOCAL_TOKEN)
+}
 
 export default function App() {
   const isCompact = useMediaQuery('(max-width: 1024px)')
   const shellRef = useRef<HTMLDivElement>(null)
   useVisualViewportLock(shellRef, isCompact)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [auth, setAuth] = useState<AuthState>('checking')
+  const [ready, setReady] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [draftMode, setDraftMode] = useState(true)
@@ -34,38 +53,24 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const token = getToken()
-    if (!token) {
-      setAuth('need-login')
-      return
-    }
+    ensureLocalToken()
+    setShowOnboarding(needsOnboarding())
     refreshSessions()
-      .then(() => setAuth('ok'))
       .catch(() => {
-        clearToken()
-        setAuth('need-login')
+        // Agent may be offline during pure UI work; still enter shell with empty list.
+        setSessions([])
       })
+      .finally(() => setReady(true))
   }, [refreshSessions])
 
   useEffect(() => {
     if (!isCompact) setSidebarOpen(false)
   }, [isCompact])
 
-  function handleLoginOk() {
-    setAuth('ok')
-    setDraftMode(true)
-    setActiveId(null)
-    setSidebarOpen(false)
-    void refreshSessions()
-  }
-
-  function handleLogout() {
-    clearToken()
-    setSessions([])
-    setActiveId(null)
-    setDraftMode(true)
-    setSidebarOpen(false)
-    setAuth('need-login')
+  function handleOnboarded() {
+    ensureLocalToken()
+    setShowOnboarding(false)
+    void refreshSessions().catch(() => setSessions([]))
   }
 
   function handleNew() {
@@ -138,7 +143,7 @@ export default function App() {
     })
   }
 
-  if (auth === 'checking') {
+  if (!ready) {
     return (
       <div className="app-shell center">
         <div className="muted">Loading…</div>
@@ -146,8 +151,8 @@ export default function App() {
     )
   }
 
-  if (auth === 'need-login') {
-    return <Login onSuccess={handleLoginOk} />
+  if (showOnboarding) {
+    return <Onboarding onComplete={handleOnboarded} />
   }
 
   return (
@@ -163,7 +168,7 @@ export default function App() {
         onDelete={(id) => void handleDelete(id)}
         onRename={(id, title) => void handleRename(id, title)}
         onTogglePin={(id, pinned) => void handleTogglePin(id, pinned)}
-        onLogout={handleLogout}
+        onOpenSettings={() => setSettingsOpen(true)}
         variant={isCompact ? 'drawer' : 'docked'}
         open={isCompact ? sidebarOpen : true}
         onClose={() => setSidebarOpen(false)}
@@ -177,6 +182,7 @@ export default function App() {
         onOpenSidebar={() => setSidebarOpen(true)}
         sidebarOpen={isCompact ? sidebarOpen : false}
       />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }

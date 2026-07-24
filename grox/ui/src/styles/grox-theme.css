@@ -1,0 +1,17 @@
+/* Thin aliases over App.css 8090 chat blue–white tokens. Do not introduce dark zinc. */
+:root {
+  --grox-bg: var(--bg);
+  --grox-panel: var(--panel);
+  --grox-border: var(--border);
+  --grox-text: var(--text);
+  --grox-muted: var(--text-muted);
+  --grox-accent: var(--brand);
+  --grox-accent-hover: var(--brand-hover);
+  --grox-sidebar-w: var(--sidebar-w);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  margin: 0;
+}

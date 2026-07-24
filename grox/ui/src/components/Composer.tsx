@@ -11,7 +11,6 @@ import {
   CornerDownLeft,
   FileText,
   Image as ImageIcon,
-  MessageSquare,
   Paperclip,
   Square,
   Upload,
@@ -130,7 +129,7 @@ export function Composer({
   imageBusy,
   onSend,
   onStop,
-  placeholder = 'Message the agent…',
+  placeholder = 'Message Grox…',
   seedText,
   onSeedConsumed,
   hint,
@@ -148,13 +147,13 @@ export function Composer({
   const [pathBusy, setPathBusy] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [uploadBusy, setUploadBusy] = useState(false)
-  const [mode, setMode] = useState<ComposerMode>('chat')
+  // MVP: chat-only; Image mode hard-hidden (type kept for API compatibility).
   const taRef = useRef<HTMLTextAreaElement>(null)
   const pathRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const dragDepth = useRef(0)
   const busy = !!streaming || !!imageBusy
-  const imageMode = mode === 'image'
+  const imageMode = false
 
   useEffect(() => {
     if (seedText == null) return
@@ -181,17 +180,6 @@ export function Composer({
       requestAnimationFrame(() => pathRef.current?.focus())
     }
   }, [pathOpen])
-
-  function setComposerMode(next: ComposerMode) {
-    if (next === mode) return
-    setMode(next)
-    if (next === 'image') {
-      setAttachments([])
-      setPathOpen(false)
-      setPathDraft('')
-      setPathError(null)
-    }
-  }
 
   async function addPath(raw: string) {
     const path = raw.trim().replace(/^@/, '')
@@ -486,84 +474,50 @@ export function Composer({
           />
           <div className="composer-toolbar">
             <div className="composer-toolbar-left">
-              <div
-                className="composer-mode-toggle"
-                role="group"
-                aria-label="Composer mode"
+              <Tooltip content="Attach a path under the session cwd (image/text/code)">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  disabled={disabled || busy || uploadBusy}
+                  onClick={() => setPathOpen((v) => !v)}
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                  Path
+                </Button>
+              </Tooltip>
+              <Tooltip
+                content={
+                  uploadFile
+                    ? 'Upload files into .chat-attachments/ under cwd (or drag & drop / paste image)'
+                    : 'Open/create a session with cwd first'
+                }
               >
-                <button
+                <Button
                   type="button"
-                  className={`composer-mode-btn${mode === 'chat' ? ' is-active' : ''}`}
-                  disabled={disabled || busy}
-                  onClick={() => setComposerMode('chat')}
-                  title="Chat with agent"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  disabled={disabled || busy || uploadBusy || !uploadFile}
+                  onClick={() => fileRef.current?.click()}
                 >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  Chat
-                </button>
-                <button
-                  type="button"
-                  className={`composer-mode-btn${mode === 'image' ? ' is-active' : ''}`}
-                  disabled={disabled || busy}
-                  onClick={() => setComposerMode('image')}
-                  title="Generate image (grok-imagine-image-lite)"
-                >
-                  <ImageIcon className="h-3.5 w-3.5" />
-                  Image
-                </button>
-              </div>
-              {!imageMode ? (
-                <>
-                  <Tooltip content="Attach a path under the session cwd (image/text/code)">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 px-2 text-xs"
-                      disabled={disabled || busy || uploadBusy}
-                      onClick={() => setPathOpen((v) => !v)}
-                    >
-                      <Paperclip className="h-3.5 w-3.5" />
-                      Path
-                    </Button>
-                  </Tooltip>
-                  <Tooltip
-                    content={
-                      uploadFile
-                        ? 'Upload files into .chat-attachments/ under cwd (or drag & drop / paste image)'
-                        : 'Open/create a session with cwd first'
-                    }
-                  >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 px-2 text-xs"
-                      disabled={disabled || busy || uploadBusy || !uploadFile}
-                      onClick={() => fileRef.current?.click()}
-                    >
-                      <Upload className="h-3.5 w-3.5" />
-                      {uploadBusy ? 'Uploading…' : 'Upload'}
-                    </Button>
-                  </Tooltip>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    multiple
-                    accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.json,.py,.ts,.tsx,.js,.jsx,.css,.html,.log,.pdf"
-                    className="sr-only"
-                    disabled={disabled || busy || !uploadFile}
-                    onChange={(e) => void handleFiles(e.target.files)}
-                  />
-                  <span className="composer-hotkey muted">
-                    Enter send · paste image · drop files
-                  </span>
-                </>
-              ) : (
-                <span className="composer-hotkey muted">
-                  Enter generate · grok-imagine-image-lite
-                </span>
-              )}
+                  <Upload className="h-3.5 w-3.5" />
+                  {uploadBusy ? 'Uploading…' : 'Upload'}
+                </Button>
+              </Tooltip>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.json,.py,.ts,.tsx,.js,.jsx,.css,.html,.log,.pdf"
+                className="sr-only"
+                disabled={disabled || busy || !uploadFile}
+                onChange={(e) => void handleFiles(e.target.files)}
+              />
+              <span className="composer-hotkey muted">
+                Enter send · paste image · drop files
+              </span>
             </div>
             <div className="composer-actions">
               {streaming ? (
@@ -573,10 +527,8 @@ export function Composer({
                 </Button>
               ) : (
                 <Button type="submit" disabled={!canSend}>
-                  {imageBusy ? 'Generating…' : imageMode ? 'Generate' : 'Send'}
-                  {!imageBusy ? (
-                    <CornerDownLeft className="h-3.5 w-3.5 opacity-80" />
-                  ) : null}
+                  Send
+                  <CornerDownLeft className="h-3.5 w-3.5 opacity-80" />
                 </Button>
               )}
             </div>

@@ -50,7 +50,7 @@
     Consolas,
     monospace;
   --dot: rgba(15, 23, 42, 0.045);
-  --sidebar-w: 300px;
+  --sidebar-w: 240px; /* Grox density; chat uses 300px */
   --artifacts-w: 360px;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -400,9 +400,13 @@ textarea {
 }
 
 .session-item.active {
-  background: #fff;
-  border-color: var(--border);
-  box-shadow: var(--shadow-md);
+  background: var(--brand-soft);
+  border-color: #bae6fd;
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.12), var(--shadow-md);
+}
+
+.session-item.active .session-title {
+  color: #0369a1;
 }
 
 .session-item.pinned {
@@ -3075,3 +3079,93 @@ button.active-toggle {
     animation: none;
   }
 }
+
+/* Settings modal — light blue–white, no dark toggle */
+.settings-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+
+.settings-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.4);
+  cursor: pointer;
+}
+
+.settings-modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  max-height: min(90dvh, 720px);
+  overflow: hidden;
+}
+
+.settings-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.85rem 0.9rem 0.7rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(247, 248, 250, 0.85);
+}
+
+.settings-modal-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.settings-modal-close {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.settings-modal-body {
+  padding: 1rem 1.1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  overflow: auto;
+}
+
+.settings-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-error {
+  margin: 0;
+}
+
+.settings-saved {
+  font-size: 12px;
+  color: var(--ok);
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+

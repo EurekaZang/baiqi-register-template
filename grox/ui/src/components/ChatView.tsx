@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ApiError,
   compactSession,
@@ -19,16 +19,16 @@ import {
   type ToolCard,
 } from '../api'
 import type { SendPayload } from './Composer'
-import { Boxes, Menu, MoreHorizontal } from 'lucide-react'
-import { extractArtifacts, type Artifact } from '../lib/content'
-import { ArtifactsPanel } from './ArtifactsPanel'
+import { Menu, MoreHorizontal } from 'lucide-react'
+// MVP: ArtifactsPanel / TasksPanel hidden from default layout (keep files for later).
+// import { ArtifactsPanel } from './ArtifactsPanel'
+// import { TasksPanel } from './TasksPanel'
 import { Composer } from './Composer'
 import { ContextUsageDetail, ContextUsageMeter } from './ContextUsage'
 import { CwdPicker } from './CwdPicker'
 import { MessageList, type StreamState } from './MessageList'
 import { MobileSheet } from './MobileSheet'
 import { ModelSelect } from './ModelSelect'
-import { TasksPanel } from './TasksPanel'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Tooltip } from './ui/tooltip'
@@ -187,7 +187,8 @@ export function ChatView({
 }: Props) {
   const [session, setSession] = useState<SessionSummary | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
-  const [tasks, setTasks] = useState<AgentTask[]>([])
+  // Keep task stream state for agent protocol; TasksPanel UI is MVP-hidden.
+  const [, setTasks] = useState<AgentTask[]>([])
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
   const [compacting, setCompacting] = useState(false)
   const [cwd, setCwd] = useState(() => {
@@ -203,12 +204,9 @@ export function ChatView({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [seedText, setSeedText] = useState<string | undefined>(undefined)
-  const [artifactsOpen, setArtifactsOpen] = useState(false)
-  const [tasksOpen, setTasksOpen] = useState(false)
   const [overflowOpen, setOverflowOpen] = useState(false)
   const [cwdSheetOpen, setCwdSheetOpen] = useState(false)
   const [contextSheetOpen, setContextSheetOpen] = useState(false)
-  const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const loadedIdRef = useRef<string | null>(null)
@@ -258,9 +256,6 @@ export function ChatView({
       setStreaming(null)
       setError(null)
       setSeedText(undefined)
-      setArtifactsOpen(false)
-      setActiveArtifactId(null)
-      setTasksOpen(false)
       setLoading(false)
       return
     }
@@ -280,9 +275,6 @@ export function ChatView({
     setMessages([])
     setTasks([])
     setContextUsage(null)
-    setArtifactsOpen(false)
-    setActiveArtifactId(null)
-    setTasksOpen(false)
     // Only show streaming chrome when the open session owns the stream.
     if (streamSessionIdRef.current !== targetId) {
       setStreaming(null)
@@ -330,18 +322,6 @@ export function ChatView({
   useEffect(() => {
     const el = listRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [messages, streaming])
-
-  const artifacts = useMemo(() => {
-    const all: Artifact[] = []
-    for (const m of messages) {
-      if (m.role !== 'assistant') continue
-      all.push(...extractArtifacts(m.content || '', m.id))
-    }
-    if (streaming?.text) {
-      all.push(...extractArtifacts(streaming.text, 'streaming'))
-    }
-    return all
   }, [messages, streaming])
 
   const applyModelCwd = useCallback(
@@ -925,34 +905,18 @@ export function ChatView({
     setSeedText(text)
   }
 
-  function handleOpenArtifact(a: Artifact) {
-    setActiveArtifactId(a.id)
-    if (isCompact) {
-      openOnly('artifacts')
-    } else {
-      setArtifactsOpen(true)
-    }
-  }
-
   function closeAllSheets() {
     setOverflowOpen(false)
     setCwdSheetOpen(false)
     setContextSheetOpen(false)
-    setTasksOpen(false)
-    setArtifactsOpen(false)
   }
 
-  function openOnly(
-    which: 'overflow' | 'cwd' | 'context' | 'tasks' | 'artifacts',
-  ) {
+  function openOnly(which: 'overflow' | 'cwd' | 'context') {
     setOverflowOpen(which === 'overflow')
     setCwdSheetOpen(which === 'cwd')
     setContextSheetOpen(which === 'context')
-    setTasksOpen(which === 'tasks')
-    setArtifactsOpen(which === 'artifacts')
   }
 
-  // Breakpoint flips share tasks/artifacts open flags across sheet vs dock/popover.
   // Always collapse overlays so desktop doesn't inherit compact sheet state (and vice versa).
   useEffect(() => {
     closeAllSheets()
@@ -968,12 +932,9 @@ export function ChatView({
       : draftMode
         ? 'New chat'
         : session?.title || 'Chat'
-  const activeTaskCount = tasks.filter(
-    (t) => (t.status || '') !== 'deleted',
-  ).length
 
   return (
-    <section className={`chat-view ${artifactsOpen ? 'with-artifacts' : ''}`}>
+    <section className="chat-view">
       <div className="chat-main-col">
         {isCompact ? (
           <header className="chat-header chat-header--compact">
@@ -1062,33 +1023,6 @@ export function ChatView({
                     running || compacting ? undefined : () => void handleCompact()
                   }
                 />
-                <TasksPanel
-                  tasks={tasks}
-                  open={tasksOpen}
-                  onOpenChange={setTasksOpen}
-                />
-                <Tooltip
-                  content={
-                    artifactsOpen
-                      ? 'Hide artifacts panel'
-                      : 'Show artifacts panel'
-                  }
-                >
-                  <Button
-                    type="button"
-                    variant={artifactsOpen ? 'secondary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setArtifactsOpen((v) => !v)}
-                    className={
-                      artifactsOpen
-                        ? 'header-action-btn active-toggle'
-                        : 'header-action-btn'
-                    }
-                  >
-                    <Boxes className="h-3.5 w-3.5" />
-                    Artifacts{artifacts.length ? ` (${artifacts.length})` : ''}
-                  </Button>
-                </Tooltip>
               </div>
             </div>
             <div className="header-toolbar">
@@ -1142,7 +1076,6 @@ export function ChatView({
                   : (userText) =>
                       void handleSend({ text: userText, attachments: [] })
               }
-              onOpenArtifact={handleOpenArtifact}
             />
           )}
         </div>
@@ -1179,34 +1112,21 @@ export function ChatView({
               ? isCompact
                 ? undefined
                 : 'Set an absolute cwd above before starting.'
-              : imageBusy
-                ? 'Generating image via grok-imagine-image-lite…'
-                : isStreaming || session?.status === 'running'
-                  ? 'Agent is running in Full auto mode.'
-                  : isCompact
-                    ? undefined
-                    : 'Chat or switch to Image mode · paste/drop files in Chat mode.'
+              : isStreaming || session?.status === 'running'
+                ? 'Agent is running in Full auto mode.'
+                : isCompact
+                  ? undefined
+                  : 'Paste or drop files under the workspace cwd.'
           }
           placeholder={
             draftMode
               ? cwd.trim()
-                ? 'Describe a task… or paste a screenshot'
-                : 'Set cwd above, then message…'
-              : 'Message the agent… (paste image ok)'
+                ? 'Message Grox…'
+                : 'Set cwd above, then message Grox…'
+              : 'Message Grox…'
           }
         />
       </div>
-
-      {!isCompact ? (
-        <ArtifactsPanel
-          artifacts={artifacts}
-          open={artifactsOpen}
-          onClose={() => setArtifactsOpen(false)}
-          activeId={activeArtifactId}
-          onSelect={setActiveArtifactId}
-          presentation="dock"
-        />
-      ) : null}
 
       {isCompact ? (
         <>
@@ -1238,22 +1158,6 @@ export function ChatView({
                     ? `${Math.round(contextUsage.percentage ?? 0)}%`
                     : '—'}
                 </span>
-              </button>
-              <button
-                type="button"
-                className="overflow-sheet-row"
-                onClick={() => openOnly('tasks')}
-              >
-                <span className="overflow-sheet-label">Tasks</span>
-                <span className="overflow-sheet-meta">{activeTaskCount}</span>
-              </button>
-              <button
-                type="button"
-                className="overflow-sheet-row"
-                onClick={() => openOnly('artifacts')}
-              >
-                <span className="overflow-sheet-label">Artifacts</span>
-                <span className="overflow-sheet-meta">{artifacts.length}</span>
               </button>
               <div className="overflow-sheet-note muted">
                 Full auto · permission_mode=bypassPermissions
@@ -1297,22 +1201,6 @@ export function ChatView({
               }
             />
           </MobileSheet>
-
-          <TasksPanel
-            tasks={tasks}
-            open={tasksOpen}
-            onOpenChange={(v) => (v ? openOnly('tasks') : setTasksOpen(false))}
-            presentation="sheet"
-          />
-
-          <ArtifactsPanel
-            artifacts={artifacts}
-            open={artifactsOpen}
-            onClose={() => setArtifactsOpen(false)}
-            activeId={activeArtifactId}
-            onSelect={setActiveArtifactId}
-            presentation="sheet"
-          />
         </>
       ) : null}
     </section>

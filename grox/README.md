@@ -147,3 +147,24 @@ grox/
   electron-builder.yml
   docs/ACCEPTANCE.md
 ```
+
+## Windows 客户安装（阿里云下载站）
+
+对最终用户，**不要**要求他们装 Node/Python。只发下载页或一行命令：
+
+| 方式 | 操作 |
+|------|------|
+| 网页 | https://kaggleyes.top/downloads/grox/ |
+| 一行安装 | `irm https://kaggleyes.top/downloads/grox/install.ps1 \| iex` |
+
+默认 API：`https://kaggleyes.top/grokapi` + 用户自己的 API Key。
+
+管理员把本机编好的 `release/Grox-Setup-*.exe` 发布到 VPS：
+
+```bash
+export SSHPASS='…'   # root@47.100.227.205
+./scripts/publish-to-aliyun.sh release/Grox-Setup-0.1.0.exe
+```
+
+完整说明：`docs/runbooks/grox-windows-client-install.md`（仓库根下）。
+

@@ -62,8 +62,15 @@ def normalize_cwd_input(cwd: str) -> str:
     text = text.replace("\\", "/")
     while "//" in text:
         text = text.replace("//", "/")
-    # Keep root "/" intact; strip trailing slash elsewhere
-    if len(text) > 1:
+    # Keep POSIX root "/" and Windows drive roots such as "D:/" intact.
+    # Stripping the slash from "D:/" produces drive-relative "D:", which
+    # pathlib correctly rejects as non-absolute on Windows.
+    is_windows_drive_root = (
+        len(text) == 3
+        and text[0].isalpha()
+        and text[1:] == ":/"
+    )
+    if len(text) > 1 and not is_windows_drive_root:
         text = text.rstrip("/")
     return text
 

@@ -373,6 +373,10 @@ export function ChatView({
     return !!id && viewSessionIdRef.current === id
   }
 
+  function isViewingSessionOrDraft(id: string | null | undefined): boolean {
+    return id ? isViewingSession(id) : viewSessionIdRef.current === null
+  }
+
   /** Ensure a real session exists so paste/drop can upload into cwd. */
   const ensureSessionForUpload = useCallback(async (): Promise<string> => {
     const existing = sessionId || activeIdRef.current
@@ -463,7 +467,7 @@ export function ChatView({
             : err instanceof Error
               ? err.message
               : 'Image generation failed'
-        if (isViewingSession(activeId)) setError(msg)
+        if (isViewingSessionOrDraft(activeId)) setError(msg)
       } finally {
         setImageBusy(false)
       }
@@ -795,7 +799,7 @@ export function ChatView({
             : err instanceof Error
               ? err.message
               : 'Send failed'
-        if (isViewingSession(activeId)) setError(msg)
+        if (isViewingSessionOrDraft(activeId)) setError(msg)
       }
       if (activeId) {
         const streamBuf = streamBuffersRef.current.get(activeId)

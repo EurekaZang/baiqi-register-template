@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.main import app
+from app.sessions import normalize_cwd_input
 
 
 def _auth_headers():
@@ -17,6 +18,12 @@ def _client(monkeypatch, tmp_path: Path) -> TestClient:
     monkeypatch.setattr(settings, "sessions_dir", sessions_dir)
     monkeypatch.setattr(settings, "chat_default_model", "grok-4.5")
     return TestClient(app)
+
+
+def test_normalize_cwd_preserves_windows_drive_root():
+    assert normalize_cwd_input("D:/") == "D:/"
+    assert normalize_cwd_input("d:\\") == "d:/"
+    assert normalize_cwd_input("D:/project/") == "D:/project"
 
 
 def test_create_requires_absolute_existing_cwd(monkeypatch, tmp_path):

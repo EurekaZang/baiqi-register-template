@@ -85,22 +85,46 @@ already-running `npm run dev`.
 **Ship builds must run on Windows 11** (or GitHub `windows-latest`). Wine is not
 the supported release path.
 
+**Order matters:** copy SPA into `agent/static` **before** PyInstaller so the
+static files are embedded in the sidecar onedir.
+
 Pipeline (`npm run build:win` → `scripts/build-win.mjs`):
 
-1. `npm run build -w grox-ui` → `ui/dist`
+1. `npm run build -w grox-ui` (or `npm run build:ui`) → `ui/dist`
 2. Copy `ui/dist` → `agent/static` (sidecar serves the SPA when packaged)
-3. **Expect** prebuilt PyInstaller onedir at `agent/dist/agent-sidecar/`
-4. `npm run build -w electron` → `electron/dist`
-5. `electron-builder --win` (`electron-builder.yml`) → `release/Grox-Setup-*.exe`
+3. **Require** `agent/dist/agent-sidecar` + binary — if missing, **exit 1**  
+   (set `GROX_RUN_PYINSTALLER=1` to run `pyinstaller build_sidecar.spec` here after static copy)
+4. `npm run build -w electron` → `electron/dist` (`package.json` `"main": "electron/dist/main.js"`)
+5. `electron-builder --win` / continue `npm run build:win` → `release/Grox-Setup-*.exe`
 
-### Sidecar (Windows-native for ship)
+### Two-phase (recommended)
+
+`build:win` always does steps 1–2 first, then fails hard unless the sidecar
+exists. Run PyInstaller **after** static is present (or after a first
+`build:win` half that copies static), then re-run packaging:
+
+```bat
+cd grox
+npm install
+npm run build:ui
+REM or start build:win once so it copies ui/dist → agent/static, then Ctrl+C after the gate
+
+cd agent
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt pyinstaller
+.venv\Scripts\pyinstaller build_sidecar.spec --noconfirm
+cd ..
+npm run build:win
+```
+
+### One-shot (Windows, venv ready)
 
 ```bat
 cd grox\agent
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt pyinstaller
-.venv\Scripts\pyinstaller build_sidecar.spec --noconfirm
 cd ..
+set GROX_RUN_PYINSTALLER=1
 npm run build:win
 ```
 

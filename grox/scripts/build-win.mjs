@@ -1,20 +1,26 @@
 /**
  * Grox Windows packaging pipeline.
  *
+ * Order (static must land in agent/static BEFORE PyInstaller embeds it):
  * 1) Build UI (Vite) → ui/dist
- * 2) Copy ui/dist → agent/static (served by packaged FastAPI sidecar)
- * 3) Expect prebuilt agent/dist/agent-sidecar (PyInstaller onedir)
+ * 2) Copy ui/dist → agent/static
+ * 3) Sidecar:
+ *      - if GROX_RUN_PYINSTALLER=1 → run pyinstaller build_sidecar.spec
+ *      - else require prebuilt agent/dist/agent-sidecar (+ binary); exit 1 if missing
  * 4) Build Electron main/preload (tsc)
  * 5) electron-builder --win (NSIS)
  *
  * Final NSIS installer must be produced on a real Windows host (or CI
  * windows-latest). Wine-based builds are optional/unsupported for ship.
  *
- * Sidecar (run on Windows before this script, or in the same Windows job):
- *   cd agent
- *   .venv\Scripts\pip install -r requirements.txt pyinstaller
- *   .venv\Scripts\pyinstaller build_sidecar.spec --noconfirm
- *   → agent/dist/agent-sidecar/
+ * Two-phase (default):
+ *   # after step 1–2 half, or manually:
+ *   cd agent && .venv\Scripts\pyinstaller build_sidecar.spec --noconfirm
+ *   npm run build:win
+ *
+ * One-shot (Windows, venv ready):
+ *   set GROX_RUN_PYINSTALLER=1
+ *   npm run build:win
  */
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -23,6 +29,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const isWin = process.platform === 'win32'
+const runPyinstaller = process.env.GROX_RUN_PYINSTALLER === '1'
 
 function run(cmd, args, opts = {}) {
   console.log(`[build-win] $ ${cmd} ${args.join(' ')}`)
@@ -51,7 +58,7 @@ function copyDir(src, dest) {
 // 1) UI
 run('npm', ['run', 'build', '-w', 'grox-ui'])
 
-// 2) ui/dist → agent/static
+// 2) ui/dist → agent/static  (must precede PyInstaller so SPA is embedded)
 const uiDist = path.join(root, 'ui', 'dist')
 const agentStatic = path.join(root, 'agent', 'static')
 if (!fs.existsSync(path.join(uiDist, 'index.html'))) {
@@ -62,34 +69,57 @@ rimraf(agentStatic)
 copyDir(uiDist, agentStatic)
 console.log(`[build-win] copied ui/dist → agent/static`)
 
-// 3) Sidecar prebuilt check
-const sidecarDir = path.join(root, 'agent', 'dist', 'agent-sidecar')
-const sidecarBin = path.join(
-  sidecarDir,
-  isWin ? 'agent-sidecar.exe' : 'agent-sidecar',
-)
-const sidecarNested = path.join(
-  sidecarDir,
-  'agent-sidecar',
-  isWin ? 'agent-sidecar.exe' : 'agent-sidecar',
-)
-if (!fs.existsSync(sidecarDir)) {
-  console.warn(
+// 3) Sidecar: optional PyInstaller, else require prebuilt (fail hard)
+const agentDir = path.join(root, 'agent')
+const sidecarDir = path.join(agentDir, 'dist', 'agent-sidecar')
+const binName = isWin ? 'agent-sidecar.exe' : 'agent-sidecar'
+const sidecarBin = path.join(sidecarDir, binName)
+const sidecarNested = path.join(sidecarDir, 'agent-sidecar', binName)
+
+function sidecarBinaryExists() {
+  return fs.existsSync(sidecarBin) || fs.existsSync(sidecarNested)
+}
+
+if (runPyinstaller) {
+  console.log(
+    '[build-win] GROX_RUN_PYINSTALLER=1 — building sidecar after static copy',
+  )
+  const pyinstaller = path.join(
+    agentDir,
+    '.venv',
+    isWin ? 'Scripts' : 'bin',
+    isWin ? 'pyinstaller.exe' : 'pyinstaller',
+  )
+  const pyCmd = fs.existsSync(pyinstaller) ? pyinstaller : 'pyinstaller'
+  run(pyCmd, ['build_sidecar.spec', '--noconfirm'], { cwd: agentDir })
+}
+
+if (!fs.existsSync(sidecarDir) || !sidecarBinaryExists()) {
+  console.error(
     [
-      '[build-win] WARNING: agent/dist/agent-sidecar not found.',
-      '  Build the sidecar on Windows before packaging:',
-      '    cd agent',
-      '    .venv\\Scripts\\pyinstaller build_sidecar.spec --noconfirm',
-      '  Continuing; electron-builder extraResources may be empty/incomplete.',
+      '[build-win] FATAL: agent/dist/agent-sidecar binary missing.',
+      '  PyInstaller must run AFTER ui/dist is copied into agent/static',
+      '  so the SPA is embedded in the sidecar bundle.',
+      '',
+      '  Two-phase (recommended):',
+      '    1) npm run build:ui && node -e "/* or re-run build:win until this gate */"',
+      '       (build:win already builds UI + copies static first)',
+      '    2) cd agent',
+      '       .venv\\\\Scripts\\\\pyinstaller build_sidecar.spec --noconfirm   # Windows',
+      '       # or: .venv/bin/pyinstaller build_sidecar.spec --noconfirm     # Linux smoke only',
+      '    3) npm run build:win   # re-runs UI+static, then electron-builder',
+      '',
+      '  One-shot on Windows with venv+pyinstaller installed:',
+      '    set GROX_RUN_PYINSTALLER=1',
+      '    npm run build:win',
+      '',
+      `  Expected: ${sidecarBin}`,
+      `       or: ${sidecarNested}`,
     ].join('\n'),
   )
-} else if (!fs.existsSync(sidecarBin) && !fs.existsSync(sidecarNested)) {
-  console.warn(
-    `[build-win] WARNING: no agent-sidecar binary under ${sidecarDir}`,
-  )
-} else {
-  console.log(`[build-win] found sidecar at ${sidecarDir}`)
+  process.exit(1)
 }
+console.log(`[build-win] found sidecar at ${sidecarDir}`)
 
 // 4) Electron tsc
 run('npm', ['run', 'build', '-w', 'electron'])

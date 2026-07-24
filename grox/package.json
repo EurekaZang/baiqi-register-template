@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Grox — Windows desktop coding agent (Codex-style)",
+  "main": "electron/dist/main.js",
   "workspaces": [
     "electron",
     "ui"

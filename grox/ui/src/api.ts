@@ -16,6 +16,13 @@ export type GroxBridge = {
   selectFolder?: () => Promise<string | null>
   openDataDir?: () => void | Promise<void>
   getVersion?: () => Promise<string>
+  windowControls?: {
+    minimize: () => void
+    toggleMaximize: () => Promise<boolean>
+    close: () => void
+    isMaximized: () => Promise<boolean>
+    onMaximizedChange: (callback: (maximized: boolean) => void) => () => void
+  }
 }
 
 export function getGroxBridge(): GroxBridge | undefined {

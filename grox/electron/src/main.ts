@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import net from 'node:net'
@@ -77,6 +77,26 @@ function registerIpc(): void {
     return app.getVersion()
   })
 
+  ipcMain.on('grox:window-minimize', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.minimize()
+  })
+
+  ipcMain.handle('grox:window-toggle-maximize', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return false
+    if (win.isMaximized()) win.unmaximize()
+    else win.maximize()
+    return win.isMaximized()
+  })
+
+  ipcMain.on('grox:window-close', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.close()
+  })
+
+  ipcMain.handle('grox:window-is-maximized', async (event) => {
+    return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false
+  })
+
   // Optional debug / future UI — not required by contract
   ipcMain.handle('grox:apiBase', async () => {
     return `http://127.0.0.1:${apiPort}`
@@ -99,6 +119,11 @@ async function createWindow(): Promise<void> {
     minWidth: 900,
     minHeight: 600,
     title: 'Grox',
+    frame: false,
+    autoHideMenuBar: true,
+    hasShadow: true,
+    roundedCorners: true,
+    backgroundColor: '#f8fafc',
     show: false,
     webPreferences: {
       preload: preloadPath,
@@ -112,6 +137,17 @@ async function createWindow(): Promise<void> {
       ],
     },
   })
+  mainWindow.setMenu(null)
+
+  const publishMaximizedState = () => {
+    if (!mainWindow || mainWindow.webContents.isDestroyed()) return
+    mainWindow.webContents.send(
+      'grox:window-maximized-changed',
+      mainWindow.isMaximized(),
+    )
+  }
+  mainWindow.on('maximize', publishMaximizedState)
+  mainWindow.on('unmaximize', publishMaximizedState)
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
@@ -126,6 +162,7 @@ async function createWindow(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
+  Menu.setApplicationMenu(null)
   dataDir = ensureDataDir(app.getPath('userData'))
   defaultCwd = path.join(app.getPath('documents'), 'Grox Workspace')
   fs.mkdirSync(defaultCwd, { recursive: true })

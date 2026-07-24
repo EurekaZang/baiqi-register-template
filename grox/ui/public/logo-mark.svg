@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="Grox">
+  <title>Grox</title>
+  <circle cx="32" cy="32" r="20" stroke="currentColor" stroke-width="3.5"
+          stroke-linecap="round" stroke-dasharray="100 26" stroke-dashoffset="10"/>
+  <path stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"
+        d="M41.5 27.8
+           C41.5 21.2 36.8 17 32 17
+           C24.8 17 19.5 22.6 19.5 32
+           C19.5 41.4 24.8 47 32 47
+           C36.8 47 40.8 44.4 42.2 39.8"/>
+  <path stroke="currentColor" stroke-width="3.5" stroke-linecap="round"
+        d="M31.5 32 H42.5"/>
+  <circle cx="42.5" cy="32" r="3.4" fill="#0ea5e9"/>
+  <circle cx="42.5" cy="32" r="1.25" fill="currentColor"/>
+</svg>

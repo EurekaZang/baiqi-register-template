@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 
 /**
  * Values are passed from main via additionalArguments so apiBase/token are
@@ -25,4 +25,21 @@ contextBridge.exposeInMainWorld('grox', {
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('grox:selectFolder'),
   openDataDir: (): Promise<void> => ipcRenderer.invoke('grox:openDataDir'),
   getVersion: (): Promise<string> => ipcRenderer.invoke('grox:getVersion'),
+  windowControls: {
+    minimize: (): void => ipcRenderer.send('grox:window-minimize'),
+    toggleMaximize: (): Promise<boolean> =>
+      ipcRenderer.invoke('grox:window-toggle-maximize'),
+    close: (): void => ipcRenderer.send('grox:window-close'),
+    isMaximized: (): Promise<boolean> =>
+      ipcRenderer.invoke('grox:window-is-maximized'),
+    onMaximizedChange: (callback: (maximized: boolean) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, maximized: unknown) => {
+        callback(Boolean(maximized))
+      }
+      ipcRenderer.on('grox:window-maximized-changed', listener)
+      return () => {
+        ipcRenderer.removeListener('grox:window-maximized-changed', listener)
+      }
+    },
+  },
 })

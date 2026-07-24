@@ -660,16 +660,16 @@ textarea {
 .chat-view {
   flex: 1;
   min-width: 0;
-  display: flex;
   min-height: 0;
+  display: flex;
 }
 
 .chat-main-col {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
 
 .chat-header {
@@ -683,6 +683,12 @@ textarea {
   position: sticky;
   top: 0;
   z-index: 5;
+  flex-shrink: 0;
+}
+
+/* compact: header need not be sticky if shell is fixed height */
+.app-shell.is-compact .chat-header {
+  position: static;
 }
 
 /* Row 1: title + badges | Context / Tasks / Artifacts */
@@ -1440,8 +1446,9 @@ textarea {
 
 .chat-scroll {
   flex: 1;
-  overflow-y: auto;
   min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Compact tasks: header chip + floating popover (does not steal chat height) */
@@ -2635,6 +2642,7 @@ button.active-toggle {
   padding: 0.75rem 1rem 1rem;
   background: rgba(247, 248, 250, 0.92);
   backdrop-filter: blur(8px);
+  flex-shrink: 0;
 }
 
 .composer-shell--compact {

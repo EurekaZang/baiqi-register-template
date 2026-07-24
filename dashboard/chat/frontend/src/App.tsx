@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   clearToken,
   getToken,
@@ -12,12 +12,15 @@ import { Login } from './components/Login'
 import { Sidebar } from './components/Sidebar'
 import { cn } from './lib/utils'
 import { useMediaQuery } from './lib/useMediaQuery'
+import { useVisualViewportLock } from './lib/useVisualViewportLock'
 import './App.css'
 
 type AuthState = 'checking' | 'need-login' | 'ok'
 
 export default function App() {
   const isCompact = useMediaQuery('(max-width: 1024px)')
+  const shellRef = useRef<HTMLDivElement>(null)
+  useVisualViewportLock(shellRef, isCompact)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [auth, setAuth] = useState<AuthState>('checking')
   const [sessions, setSessions] = useState<SessionSummary[]>([])
@@ -146,7 +149,10 @@ export default function App() {
   }
 
   return (
-    <div className={cn('app-shell', isCompact && 'is-compact')}>
+    <div
+      ref={shellRef}
+      className={cn('app-shell', isCompact && 'is-compact')}
+    >
       <Sidebar
         sessions={sessions}
         activeId={draftMode ? null : activeId}

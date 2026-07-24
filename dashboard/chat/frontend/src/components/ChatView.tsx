@@ -882,6 +882,13 @@ export function ChatView({
     setArtifactsOpen(which === 'artifacts')
   }
 
+  // Breakpoint flips share tasks/artifacts open flags across sheet vs dock/popover.
+  // Always collapse overlays so desktop doesn't inherit compact sheet state (and vice versa).
+  useEffect(() => {
+    closeAllSheets()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when compact mode changes
+  }, [isCompact])
+
   const headerCwd = draftMode ? cwd : session?.cwd || cwd
   const headerModel = draftMode ? model : session?.model || model
   const running = isStreaming || imageBusy || session?.status === 'running'

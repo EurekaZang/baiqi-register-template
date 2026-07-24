@@ -109,10 +109,25 @@ export function Sidebar({
     return () => window.removeEventListener('keydown', onKey)
   }, [variant, open, onClose])
 
-  // Move focus into the drawer when it opens (close control is first actionable).
+  // Move focus into the drawer when it opens; restore to ☰ trigger on close.
+  const wasOpenRef = useRef(false)
   useEffect(() => {
-    if (variant !== 'drawer' || !open) return
-    closeBtnRef.current?.focus()
+    if (variant !== 'drawer') {
+      wasOpenRef.current = false
+      return
+    }
+    if (open) {
+      closeBtnRef.current?.focus()
+      wasOpenRef.current = true
+      return
+    }
+    if (wasOpenRef.current) {
+      const trigger = document.querySelector<HTMLElement>(
+        '[aria-controls="chat-sidebar"]',
+      )
+      trigger?.focus()
+    }
+    wasOpenRef.current = false
   }, [variant, open])
 
   const aside = (

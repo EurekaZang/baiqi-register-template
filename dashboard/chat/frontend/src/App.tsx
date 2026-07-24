@@ -55,6 +55,7 @@ export default function App() {
     setAuth('ok')
     setDraftMode(true)
     setActiveId(null)
+    setSidebarOpen(false)
     void refreshSessions()
   }
 
@@ -63,6 +64,7 @@ export default function App() {
     setSessions([])
     setActiveId(null)
     setDraftMode(true)
+    setSidebarOpen(false)
     setAuth('need-login')
   }
 

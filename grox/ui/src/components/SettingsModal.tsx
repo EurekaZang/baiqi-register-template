@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { FolderOpen, X } from 'lucide-react'
-import { getRuntimeConfig, putRuntimeConfig } from '../api'
+import {
+  DEFAULT_GROK_BASE_URL,
+  fetchMe,
+  getGrokBaseUrl,
+  getRuntimeConfig,
+  getSessionToken,
+  logoutAccount,
+  putRuntimeConfig,
+  setGrokBaseUrl,
+  type MeResponse,
+} from '../api'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
-
-const DEFAULT_BASE_URL = 'https://kaggleyes.top/grokapi'
 
 type GroxBridge = {
   openDataDir?: () => void | Promise<void>
@@ -14,40 +22,62 @@ type GroxBridge = {
 type Props = {
   open: boolean
   onClose: () => void
+  onSignedOut?: () => void
+  me?: MeResponse | null
 }
 
-export function SettingsModal({ open, onClose }: Props) {
-  const [baseUrl, setBaseUrl] = useState(DEFAULT_BASE_URL)
-  const [apiKey, setApiKey] = useState('')
-  const [apiKeySet, setApiKeySet] = useState(false)
+function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return '0'
+  if (n >= 1_000_000) {
+    const v = n / 1_000_000
+    return `${v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, '')}M`
+  }
+  if (n >= 1_000) {
+    const v = n / 1_000
+    return `${v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, '')}k`
+  }
+  return String(Math.round(n))
+}
+
+function titleCaseTier(tier: string): string {
+  const t = (tier || 'free').toLowerCase()
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
+export function SettingsModal({ open, onClose, onSignedOut, me: meProp }: Props) {
+  const [baseUrl, setBaseUrl] = useState(DEFAULT_GROK_BASE_URL)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+  const [me, setMe] = useState<MeResponse | null>(meProp ?? null)
   const closeBtnRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (meProp !== undefined) setMe(meProp)
+  }, [meProp])
 
   useEffect(() => {
     if (!open) return
     let cancelled = false
     setError(null)
     setSaved(false)
-    setApiKey('')
     ;(async () => {
       try {
         const cfg = await getRuntimeConfig()
         if (cancelled) return
-        setBaseUrl(cfg.base_url || DEFAULT_BASE_URL)
-        setApiKeySet(Boolean(cfg.api_key_set))
+        setBaseUrl(cfg.base_url || getGrokBaseUrl() || DEFAULT_GROK_BASE_URL)
       } catch {
         if (cancelled) return
+        setBaseUrl(getGrokBaseUrl() || DEFAULT_GROK_BASE_URL)
+      }
+      // Refresh /v1/me when modal opens (if session present).
+      if (getSessionToken()) {
         try {
-          setBaseUrl(localStorage.getItem('grox_base_url') || DEFAULT_BASE_URL)
-          const localKey = localStorage.getItem('grox_api_key') || ''
-          setApiKey(localKey)
-          setApiKeySet(Boolean(localKey.trim()))
+          const latest = await fetchMe()
+          if (!cancelled) setMe(latest)
         } catch {
-          setBaseUrl(DEFAULT_BASE_URL)
-          setApiKey('')
-          setApiKeySet(false)
+          /* ignore; chip/settings may show stale */
         }
       }
     })()
@@ -71,36 +101,37 @@ export function SettingsModal({ open, onClose }: Props) {
     setError(null)
     setSaved(false)
     const url = baseUrl.trim().replace(/\/+$/, '')
-    const key = apiKey.trim()
     if (!url) {
       setError('Base URL is required')
       return
     }
-    if (!key && !apiKeySet) {
-      setError('API Key is required')
-      return
-    }
     setBusy(true)
     try {
+      setGrokBaseUrl(url)
+      const session = getSessionToken()
       const body: { base_url: string; api_key?: string } = { base_url: url }
-      if (key) body.api_key = key
+      // Keep agent Bearer in sync with account session when present.
+      if (session) body.api_key = session
       await putRuntimeConfig(body)
-      try {
-        localStorage.setItem('grox_base_url', url)
-        if (key) localStorage.setItem('grox_api_key', key)
-        localStorage.setItem('grox_onboarded', '1')
-      } catch {
-        /* ignore */
-      }
-      if (key) {
-        setApiKeySet(true)
-        setApiKey('')
-      }
       setSaved(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save settings')
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function onSignOut() {
+    setSigningOut(true)
+    setError(null)
+    try {
+      await logoutAccount()
+      onSignedOut?.()
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign out failed')
+    } finally {
+      setSigningOut(false)
     }
   }
 
@@ -114,6 +145,18 @@ export function SettingsModal({ open, onClose }: Props) {
   }
 
   if (!open) return null
+
+  const tierLabel = me
+    ? titleCaseTier(me.effective_tier || me.tier || 'free')
+    : null
+  const used = me?.usage?.used ?? 0
+  const limit = me?.usage?.limit ?? 0
+  const usageLabel =
+    me && limit > 0
+      ? `${formatTokens(used)} / ${formatTokens(limit)} tokens`
+      : me
+        ? `${formatTokens(used)} tokens`
+        : null
 
   return (
     <div className="settings-modal-root" role="presentation">
@@ -146,6 +189,47 @@ export function SettingsModal({ open, onClose }: Props) {
           </Button>
         </div>
         <form className="settings-modal-body" onSubmit={(e) => void onSubmit(e)}>
+          {me ? (
+            <div className="settings-account-card">
+              <div className="settings-account-row">
+                <span className="settings-account-label">Account</span>
+                <span className="settings-account-value">
+                  {me.user.display_name || me.user.username}
+                </span>
+              </div>
+              <div className="settings-account-row">
+                <span className="settings-account-label">Tier</span>
+                <span className="settings-account-value">
+                  {tierLabel}
+                  {me.effective_tier &&
+                  me.tier &&
+                  me.effective_tier !== me.tier
+                    ? ` (stored ${titleCaseTier(me.tier)})`
+                    : ''}
+                </span>
+              </div>
+              {usageLabel ? (
+                <div className="settings-account-row">
+                  <span className="settings-account-label">Usage</span>
+                  <span className="settings-account-value">{usageLabel}</span>
+                </div>
+              ) : null}
+              {me.usage?.period ? (
+                <div className="settings-account-row">
+                  <span className="settings-account-label">Period</span>
+                  <span className="settings-account-value muted">
+                    {me.usage.period}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <p className="settings-note muted">
+              Signed in with an account session. Tier and usage appear after
+              /v1/me loads.
+            </p>
+          )}
+
           <label className="field">
             <span>Base URL</span>
             <Input
@@ -155,30 +239,16 @@ export function SettingsModal({ open, onClose }: Props) {
                 setBaseUrl(e.target.value)
                 setSaved(false)
               }}
-              placeholder={DEFAULT_BASE_URL}
-              disabled={busy}
+              placeholder={DEFAULT_GROK_BASE_URL}
+              disabled={busy || signingOut}
               autoComplete="off"
               spellCheck={false}
               required
             />
           </label>
-          <label className="field">
-            <span>API Key{apiKeySet ? ' (leave blank to keep)' : ''}</span>
-            <Input
-              type="password"
-              value={apiKey}
-              onChange={(e) => {
-                setApiKey(e.target.value)
-                setSaved(false)
-              }}
-              placeholder={apiKeySet ? '•••••••• (set)' : 'sk-…'}
-              disabled={busy}
-              autoComplete="off"
-              required={!apiKeySet}
-            />
-          </label>
           <p className="settings-note muted">
-            Theme is fixed to 8090 chat blue–white for this MVP.
+            Normal mode uses account login — API keys are not configured in the
+            client. Theme is fixed to 8090 chat blue–white for this MVP.
           </p>
           {error ? <div className="error-banner settings-error">{error}</div> : null}
           {saved ? (
@@ -189,15 +259,20 @@ export function SettingsModal({ open, onClose }: Props) {
               type="button"
               variant="secondary"
               onClick={openDataFolder}
-              disabled={busy}
+              disabled={busy || signingOut}
             >
               <FolderOpen className="mr-2 h-4 w-4" />
               Open data folder
             </Button>
             <Button
-              type="submit"
-              disabled={busy || !baseUrl.trim() || (!apiKey.trim() && !apiKeySet)}
+              type="button"
+              variant="secondary"
+              onClick={() => void onSignOut()}
+              disabled={busy || signingOut}
             >
+              {signingOut ? 'Signing out…' : 'Sign out'}
+            </Button>
+            <Button type="submit" disabled={busy || signingOut || !baseUrl.trim()}>
               {busy ? 'Saving…' : 'Save'}
             </Button>
           </div>

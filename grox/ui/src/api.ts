@@ -1,6 +1,10 @@
 /** API client for Grox desktop agent. Base path respects Vite `base` (`/`). */
 
 const TOKEN_KEY = 'chat_token'
+/** Upstream grokcli-2api account session (Bearer for LLM / /v1/me). */
+export const SESSION_TOKEN_KEY = 'grox_session_token'
+export const BASE_URL_KEY = 'grox_base_url'
+export const DEFAULT_GROK_BASE_URL = 'https://kaggleyes.top/grokapi'
 
 export type GroxBridge = {
   /** Origin string, e.g. http://127.0.0.1:17890 — NOT a function. */
@@ -26,7 +30,28 @@ export function apiBase(): string {
   return `${base.replace(/\/?$/, '/')}api`
 }
 
+/** Public grokcli-2api base used for account login and /v1/me. */
+export function getGrokBaseUrl(): string {
+  try {
+    const stored = (localStorage.getItem(BASE_URL_KEY) || '').trim().replace(/\/+$/, '')
+    if (stored) return stored
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_GROK_BASE_URL
+}
+
+export function setGrokBaseUrl(url: string): void {
+  const clean = url.trim().replace(/\/+$/, '') || DEFAULT_GROK_BASE_URL
+  try {
+    localStorage.setItem(BASE_URL_KEY, clean)
+  } catch {
+    /* ignore */
+  }
+}
+
 let memoryToken: string | null = null
+let memorySessionToken: string | null = null
 
 export function getToken(): string | null {
   if (memoryToken) return memoryToken
@@ -54,6 +79,38 @@ export function setToken(token: string | null): void {
 
 export function clearToken(): void {
   setToken(null)
+}
+
+export function getSessionToken(): string | null {
+  if (memorySessionToken) return memorySessionToken
+  try {
+    const fromStorage = localStorage.getItem(SESSION_TOKEN_KEY)
+    if (fromStorage) {
+      memorySessionToken = fromStorage
+      return fromStorage
+    }
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+export function setSessionToken(token: string | null): void {
+  memorySessionToken = token
+  try {
+    if (token) localStorage.setItem(SESSION_TOKEN_KEY, token)
+    else localStorage.removeItem(SESSION_TOKEN_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearSessionToken(): void {
+  setSessionToken(null)
+}
+
+export function hasAccountSession(): boolean {
+  return Boolean((getSessionToken() || '').trim())
 }
 
 /**
@@ -302,6 +359,152 @@ export async function putRuntimeConfig(
     method: 'PUT',
     body: JSON.stringify(body),
   })
+}
+
+// ── Account login (grokcli-2api) ────────────────────────────────────────────
+
+export type AccountUser = {
+  id: string
+  username: string
+  display_name?: string
+  tier?: string
+  tier_expires_at?: number | null
+  status?: string
+  created_at?: number
+  updated_at?: number
+}
+
+export type AccountLoginResponse = {
+  session_token: string
+  expires_at?: number
+  user: AccountUser
+}
+
+export type MeUsage = {
+  used: number
+  limit: number
+  period?: string
+  requests?: number
+}
+
+export type MeLimits = {
+  monthly_token_limit?: number
+  max_tokens_per_request?: number
+  rpm?: number
+  concurrent?: number
+  models_allow?: string[]
+  agent?: boolean
+  web_search?: boolean
+}
+
+export type MeResponse = {
+  user: AccountUser
+  tier: string
+  effective_tier: string
+  expires_at?: number | null
+  usage: MeUsage
+  limits?: MeLimits
+}
+
+async function grokFetch<T = unknown>(
+  path: string,
+  init: RequestInit = {},
+  opts?: { bearer?: string | null },
+): Promise<T> {
+  const base = getGrokBaseUrl().replace(/\/+$/, '')
+  const url = path.startsWith('http')
+    ? path
+    : `${base}${path.startsWith('/') ? path : `/${path}`}`
+  const headers = new Headers(init.headers)
+  const bearer = opts?.bearer
+  if (bearer) headers.set('Authorization', `Bearer ${bearer}`)
+  if (init.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+  const res = await fetch(url, { ...init, headers })
+  if (!res.ok) throw await parseError(res)
+  if (res.status === 204) return undefined as T
+  const text = await res.text()
+  if (!text) return undefined as T
+  return JSON.parse(text) as T
+}
+
+/**
+ * Username/password login against grokcli-2api.
+ * Stores session_token and pushes it into the local agent runtime as ANTHROPIC_API_KEY.
+ */
+export async function loginAccount(
+  username: string,
+  password: string,
+  baseUrl?: string,
+): Promise<AccountLoginResponse> {
+  const url = (baseUrl || getGrokBaseUrl()).trim().replace(/\/+$/, '')
+  if (!url) throw new Error('Base URL is required')
+  setGrokBaseUrl(url)
+
+  const res = await fetch(`${url}/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: username.trim(), password }),
+  })
+  if (!res.ok) throw await parseError(res)
+  const body = (await res.json()) as AccountLoginResponse
+  if (!body?.session_token) {
+    throw new Error('Login response missing session_token')
+  }
+  setSessionToken(body.session_token)
+
+  // Wire session into local agent so Claude SDK / models use Bearer session.
+  try {
+    await putRuntimeConfig({ base_url: url, api_key: body.session_token })
+  } catch {
+    // Agent may be offline during pure UI work; session still stored for /v1/me.
+  }
+
+  // Drop legacy key onboarding markers; account session is the gate now.
+  try {
+    localStorage.removeItem('grox_api_key')
+    localStorage.setItem('grox_onboarded', '1')
+  } catch {
+    /* ignore */
+  }
+  return body
+}
+
+export async function fetchMe(
+  sessionToken?: string | null,
+): Promise<MeResponse> {
+  const token = (sessionToken ?? getSessionToken() ?? '').trim()
+  if (!token) throw new ApiError(401, 'Not signed in')
+  return grokFetch<MeResponse>('/v1/me', { method: 'GET' }, { bearer: token })
+}
+
+export async function logoutAccount(): Promise<void> {
+  const token = getSessionToken()
+  if (token) {
+    try {
+      await grokFetch(
+        '/v1/auth/logout',
+        { method: 'POST' },
+        { bearer: token },
+      )
+    } catch {
+      /* best-effort revoke */
+    }
+  }
+  clearSessionToken()
+  try {
+    localStorage.removeItem('grox_api_key')
+    localStorage.removeItem('grox_onboarded')
+  } catch {
+    /* ignore */
+  }
+  // Clear agent key so a stale session is not reused.
+  try {
+    await putRuntimeConfig({ api_key: '' })
+  } catch {
+    /* agent may be offline */
+  }
 }
 
 export async function listSessions(): Promise<SessionSummary[]> {

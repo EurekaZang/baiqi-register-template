@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  fetchMe,
   getToken,
+  hasAccountSession,
   listSessions,
   deleteSession,
   patchSession,
   setToken,
+  type MeResponse,
   type SessionSummary,
 } from './api'
 import { ChatView } from './components/ChatView'
@@ -19,19 +22,27 @@ import './styles/grox-theme.css'
 
 const LOCAL_TOKEN = 'grox-local-token'
 
-function needsOnboarding(): boolean {
-  try {
-    const onboarded = localStorage.getItem('grox_onboarded') === '1'
-    const apiKey = (localStorage.getItem('grox_api_key') || '').trim()
-    return !onboarded || !apiKey
-  } catch {
-    return true
-  }
-}
-
-/** Desktop / dev: always use local token — no login gate. */
+/** Desktop / dev: always use local loopback token for agent API. */
 function ensureLocalToken(): void {
   if (!getToken()) setToken(LOCAL_TOKEN)
+}
+
+function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return '0'
+  if (n >= 1_000_000) {
+    const v = n / 1_000_000
+    return `${v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, '')}M`
+  }
+  if (n >= 1_000) {
+    const v = n / 1_000
+    return `${v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, '')}k`
+  }
+  return String(Math.round(n))
+}
+
+function titleCaseTier(tier: string): string {
+  const t = (tier || 'free').toLowerCase()
+  return t.charAt(0).toUpperCase() + t.slice(1)
 }
 
 export default function App() {
@@ -40,11 +51,12 @@ export default function App() {
   useVisualViewportLock(shellRef, isCompact)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [ready, setReady] = useState(false)
-  const [showOnboarding, setShowOnboarding] = useState(true)
+  const [showLogin, setShowLogin] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [draftMode, setDraftMode] = useState(true)
+  const [me, setMe] = useState<MeResponse | null>(null)
 
   const refreshSessions = useCallback(async () => {
     const list = await listSessions()
@@ -52,25 +64,54 @@ export default function App() {
     return list
   }, [])
 
+  const refreshMe = useCallback(async () => {
+    if (!hasAccountSession()) {
+      setMe(null)
+      return null
+    }
+    try {
+      const profile = await fetchMe()
+      setMe(profile)
+      return profile
+    } catch {
+      setMe(null)
+      return null
+    }
+  }, [])
+
   useEffect(() => {
     ensureLocalToken()
-    setShowOnboarding(needsOnboarding())
-    refreshSessions()
-      .catch(() => {
-        // Agent may be offline during pure UI work; still enter shell with empty list.
+    const loggedIn = hasAccountSession()
+    setShowLogin(!loggedIn)
+    if (!loggedIn) {
+      setReady(true)
+      return
+    }
+    void Promise.all([
+      refreshSessions().catch(() => {
         setSessions([])
-      })
-      .finally(() => setReady(true))
-  }, [refreshSessions])
+      }),
+      refreshMe(),
+    ]).finally(() => setReady(true))
+  }, [refreshSessions, refreshMe])
 
   useEffect(() => {
     if (!isCompact) setSidebarOpen(false)
   }, [isCompact])
 
-  function handleOnboarded() {
+  function handleLoggedIn() {
     ensureLocalToken()
-    setShowOnboarding(false)
+    setShowLogin(false)
     void refreshSessions().catch(() => setSessions([]))
+    void refreshMe()
+  }
+
+  function handleSignedOut() {
+    setMe(null)
+    setSessions([])
+    setActiveId(null)
+    setDraftMode(true)
+    setShowLogin(true)
   }
 
   function handleNew() {
@@ -151,9 +192,19 @@ export default function App() {
     )
   }
 
-  if (showOnboarding) {
-    return <Onboarding onComplete={handleOnboarded} />
+  if (showLogin) {
+    return <Onboarding onComplete={handleLoggedIn} />
   }
+
+  const tier = me?.effective_tier || me?.tier || ''
+  const used = me?.usage?.used ?? 0
+  const limit = me?.usage?.limit ?? 0
+  const tierChip =
+    me && tier
+      ? `${titleCaseTier(tier)} · ${formatTokens(used)}${
+          limit > 0 ? ` / ${formatTokens(limit)}` : ''
+        } tokens`
+      : null
 
   return (
     <div
@@ -169,6 +220,7 @@ export default function App() {
         onRename={(id, title) => void handleRename(id, title)}
         onTogglePin={(id, pinned) => void handleTogglePin(id, pinned)}
         onOpenSettings={() => setSettingsOpen(true)}
+        tierChip={tierChip}
         variant={isCompact ? 'drawer' : 'docked'}
         open={isCompact ? sidebarOpen : true}
         onClose={() => setSidebarOpen(false)}
@@ -182,7 +234,12 @@ export default function App() {
         onOpenSidebar={() => setSidebarOpen(true)}
         sidebarOpen={isCompact ? sidebarOpen : false}
       />
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onSignedOut={handleSignedOut}
+        me={me}
+      />
     </div>
   )
 }

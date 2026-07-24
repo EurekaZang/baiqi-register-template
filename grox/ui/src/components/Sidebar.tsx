@@ -17,6 +17,8 @@ type Props = {
   onRename: (id: string, title: string) => void
   onTogglePin: (id: string, pinned: boolean) => void
   onOpenSettings?: () => void
+  /** e.g. "Plus · 1.2M / 5M tokens" from /v1/me */
+  tierChip?: string | null
   /** docked = desktop flex child; drawer = off-canvas */
   variant?: 'docked' | 'drawer'
   open?: boolean
@@ -49,6 +51,7 @@ export function Sidebar({
   onRename,
   onTogglePin,
   onOpenSettings,
+  tierChip,
   variant = 'docked',
   open = true,
   onClose,
@@ -155,6 +158,19 @@ export function Sidebar({
           ) : null}
         </div>
         <div className="sidebar-sub muted">Agent workspace</div>
+        {tierChip ? (
+          <button
+            type="button"
+            className="tier-chip"
+            title="Account tier and monthly usage"
+            onClick={() => {
+              onOpenSettings?.()
+              onClose?.()
+            }}
+          >
+            {tierChip}
+          </button>
+        ) : null}
       </div>
 
       <div className="sidebar-top">

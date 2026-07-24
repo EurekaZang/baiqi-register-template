@@ -3169,3 +3169,82 @@ button.active-toggle {
   margin-top: 0.25rem;
 }
 
+.login-advanced-toggle {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.login-advanced-toggle:hover {
+  color: var(--text);
+}
+
+.login-error {
+  margin: 0;
+}
+
+.tier-chip {
+  display: inline-flex;
+  align-items: center;
+  margin: 0.35rem 0 0;
+  max-width: 100%;
+  border: 1px solid #bae6fd;
+  background: #f0f9ff;
+  color: #0369a1;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tier-chip:hover {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+}
+
+.settings-account-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(240, 249, 255, 0.55);
+}
+
+.settings-account-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 13px;
+}
+
+.settings-account-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.settings-account-value {
+  text-align: right;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+}
+

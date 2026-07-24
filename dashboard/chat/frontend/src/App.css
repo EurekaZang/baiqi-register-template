@@ -29,8 +29,26 @@
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06);
   --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.08);
-  --font: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Geometric product sans + designed CJK companion + coding mono */
+  --font:
+    'Plus Jakarta Sans',
+    'Noto Sans SC',
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei UI',
+    'Microsoft YaHei',
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+  --mono:
+    'JetBrains Mono',
+    'Sarasa Mono SC',
+    'Noto Sans Mono CJK SC',
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
   --dot: rgba(15, 23, 42, 0.045);
   --sidebar-w: 300px;
   --artifacts-w: 360px;
@@ -49,16 +67,22 @@ html,
 body,
 #root {
   height: 100%;
+  height: 100dvh;
   margin: 0;
 }
 
 body {
   font-family: var(--font);
+  font-optical-sizing: auto;
+  font-feature-settings: 'ss01' on, 'cv11' on;
+  letter-spacing: -0.011em;
   background-color: var(--bg);
   background-image: radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 0);
   background-size: 20px 20px;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -72,7 +96,9 @@ textarea {
 .app-shell {
   display: flex;
   height: 100%;
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   background-color: var(--bg);
   background-image: radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 0);
   background-size: 20px 20px;
@@ -81,6 +107,7 @@ textarea {
 .app-shell.center {
   align-items: center;
   justify-content: center;
+  overflow: auto;
 }
 
 .muted {
@@ -152,10 +179,15 @@ textarea {
 
 /* Login — white card on dotted geek bg */
 .login-page {
-  min-height: 100vh;
+  min-height: 100%;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 1.5rem;
+  padding:
+    max(1.5rem, env(safe-area-inset-top, 0px))
+    max(1.5rem, env(safe-area-inset-right, 0px))
+    max(1.5rem, env(safe-area-inset-bottom, 0px))
+    max(1.5rem, env(safe-area-inset-left, 0px));
   background-color: var(--bg);
   background-image: radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 0);
   background-size: 20px 20px;
@@ -176,8 +208,8 @@ textarea {
 .login-card h1 {
   margin: 0;
   font-size: 15px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .brand-accent {
@@ -188,8 +220,8 @@ textarea {
   color: inherit;
   text-decoration: none;
   font-size: 15px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .brand-link:hover {
@@ -512,8 +544,8 @@ textarea {
 .chat-title {
   margin: 0;
   font-size: 15px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   line-height: 1.2;
   color: var(--text);
   max-width: min(48vw, 480px);
@@ -1808,7 +1840,8 @@ button.active-toggle {
 .user-text {
   white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.55;
+  line-height: 1.62;
+  letter-spacing: -0.008em;
 }
 
 .msg-actions {
@@ -1842,8 +1875,17 @@ button.active-toggle {
 
 
 .md {
-  line-height: 1.6;
+  line-height: 1.68;
+  letter-spacing: -0.008em;
   word-break: break-word;
+}
+
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  letter-spacing: -0.025em;
+  font-weight: 700;
 }
 
 .md p {
@@ -2649,39 +2691,3 @@ button.active-toggle {
   }
 }
 
-@media (max-width: 720px) {
-  .sidebar {
-    width: 72px;
-  }
-
-  .sidebar-sub,
-  .sidebar-search,
-  .session-title,
-  .session-meta,
-  .session-group-label,
-  .sidebar-footer-meta,
-  .sidebar-footer .btn,
-  .sidebar-top .btn,
-  .brand-link {
-    font-size: 0 !important;
-  }
-
-  .sidebar-top .btn::before {
-    content: '+';
-    font-size: 1.2rem;
-  }
-
-  .session-item {
-    padding: 0.75rem;
-  }
-
-  .session-actions {
-    display: none;
-  }
-
-  .artifacts-panel,
-  .artifacts-panel-inner {
-    width: min(100vw, 360px);
-    min-width: min(100vw, 360px);
-  }
-}

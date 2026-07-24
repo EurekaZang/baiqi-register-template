@@ -35,31 +35,20 @@ When finished, **all** of the following must be true:
 
 | Item | Value |
 |------|--------|
-| Remote | `https://github.com/baiqigo/baiqi-register-template.git` |
+| Remote (**canonical public, use this**) | `https://github.com/EurekaZang/baiqi-register-template.git` |
+| Upstream fork parent (read-only for EurekaZang) | `https://github.com/baiqigo/baiqi-register-template.git` |
 | App root | `grox/` (monorepo subfolder) |
 | Default branch | `main` |
+| Handoff doc (raw) | https://github.com/EurekaZang/baiqi-register-template/blob/main/docs/runbooks/GROX_WINDOWS_BUILD_AND_PUBLISH_AGENT.md |
 
-**Clone:**
+**Clone (Windows agent):**
 
 ```powershell
-git clone https://github.com/baiqigo/baiqi-register-template.git
+git clone https://github.com/EurekaZang/baiqi-register-template.git
 cd baiqi-register-template\grox
 ```
 
-**If `grox/` is missing or outdated on GitHub:** the implementer machine that has the full tree must **push** first:
-
-```bash
-# On the machine that already has grox/ (e.g. Linux lab)
-cd /path/to/baiqi-register-template
-git status
-git add grox docs/runbooks/GROX_WINDOWS_BUILD_AND_PUBLISH_AGENT.md \
-  docs/runbooks/grox-windows-client-install.md \
-  docs/superpowers/specs/2026-07-24-grox-windows-desktop-design.md \
-  docs/superpowers/plans/2026-07-24-grox-windows-desktop.md \
-  grox/scripts/publish-to-aliyun.sh
-git commit -m "docs(grox): Windows build/publish agent handoff"
-git push origin main
-```
+**Note:** Account `EurekaZang` can **push** to `EurekaZang/baiqi-register-template` but has **pull-only** on `baiqigo/baiqi-register-template`. Always develop/push against the EurekaZang remote unless you have baiqigo write access.
 
 Do **not** commit secrets (API keys, VPS passwords) into the repo.
 

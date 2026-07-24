@@ -10,11 +10,15 @@ import {
 import { ChatView } from './components/ChatView'
 import { Login } from './components/Login'
 import { Sidebar } from './components/Sidebar'
+import { cn } from './lib/utils'
+import { useMediaQuery } from './lib/useMediaQuery'
 import './App.css'
 
 type AuthState = 'checking' | 'need-login' | 'ok'
 
 export default function App() {
+  const isCompact = useMediaQuery('(max-width: 1024px)')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [auth, setAuth] = useState<AuthState>('checking')
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -39,6 +43,10 @@ export default function App() {
         setAuth('need-login')
       })
   }, [refreshSessions])
+
+  useEffect(() => {
+    if (!isCompact) setSidebarOpen(false)
+  }, [isCompact])
 
   function handleLoginOk() {
     setAuth('ok')
@@ -138,7 +146,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={cn('app-shell', isCompact && 'is-compact')}>
       <Sidebar
         sessions={sessions}
         activeId={draftMode ? null : activeId}
@@ -148,12 +156,17 @@ export default function App() {
         onRename={(id, title) => void handleRename(id, title)}
         onTogglePin={(id, pinned) => void handleTogglePin(id, pinned)}
         onLogout={handleLogout}
+        variant={isCompact ? 'drawer' : 'docked'}
+        open={isCompact ? sidebarOpen : true}
+        onClose={() => setSidebarOpen(false)}
       />
       <ChatView
         sessionId={draftMode ? null : activeId}
         draftMode={draftMode || !activeId}
         onSessionCreated={handleSessionCreated}
         onSessionUpdated={handleSessionUpdated}
+        isCompact={isCompact}
+        onOpenSidebar={() => setSidebarOpen(true)}
       />
     </div>
   )

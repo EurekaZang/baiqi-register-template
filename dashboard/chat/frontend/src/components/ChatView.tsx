@@ -19,7 +19,7 @@ import {
   type ToolCard,
 } from '../api'
 import type { SendPayload } from './Composer'
-import { Boxes } from 'lucide-react'
+import { Boxes, Menu } from 'lucide-react'
 import { extractArtifacts, type Artifact } from '../lib/content'
 import { ArtifactsPanel } from './ArtifactsPanel'
 import { Composer } from './Composer'
@@ -111,6 +111,8 @@ type Props = {
   onSessionCreated: (session: SessionSummary) => void
   onSessionUpdated: (session: SessionSummary) => void
   defaultModel?: string
+  isCompact?: boolean
+  onOpenSidebar?: () => void
 }
 
 export function ChatView({
@@ -119,6 +121,8 @@ export function ChatView({
   onSessionCreated,
   onSessionUpdated,
   defaultModel = 'grok-4.5',
+  isCompact = false,
+  onOpenSidebar,
 }: Props) {
   const [session, setSession] = useState<SessionSummary | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -858,6 +862,20 @@ export function ChatView({
         <header className="chat-header">
           <div className="header-top">
             <div className="header-title-row">
+              {isCompact ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="header-menu-btn"
+                  aria-label="Open sessions"
+                  aria-expanded={false}
+                  aria-controls="chat-sidebar"
+                  onClick={() => onOpenSidebar?.()}
+                >
+                  <Menu className="h-5 w-5" />
+                </Button>
+              ) : null}
               <h1 className="chat-title">{title}</h1>
               <Tooltip content="permission_mode=bypassPermissions">
                 <Badge variant="success" className="full-auto-badge">

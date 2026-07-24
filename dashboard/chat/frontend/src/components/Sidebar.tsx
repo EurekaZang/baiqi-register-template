@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
-import { LogOut, Pin, PinOff, Pencil, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { LogOut, Pin, PinOff, Pencil, Trash2, X } from 'lucide-react'
 import type { SessionSummary } from '../api'
 import { groupSessionsByDay } from '../lib/content'
+import { cn } from '../lib/utils'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Separator } from './ui/separator'
@@ -16,6 +17,10 @@ type Props = {
   onRename: (id: string, title: string) => void
   onTogglePin: (id: string, pinned: boolean) => void
   onLogout: () => void
+  /** docked = desktop flex child; drawer = off-canvas */
+  variant?: 'docked' | 'drawer'
+  open?: boolean
+  onClose?: () => void
 }
 
 function shortTitle(s: SessionSummary): string {
@@ -44,6 +49,9 @@ export function Sidebar({
   onRename,
   onTogglePin,
   onLogout,
+  variant = 'docked',
+  open = true,
+  onClose,
 }: Props) {
   const [query, setQuery] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -76,17 +84,63 @@ export function Sidebar({
     onRename(id, t)
   }
 
-  return (
-    <aside className="sidebar">
+  function selectAndClose(id: string) {
+    onSelect(id)
+    onClose?.()
+  }
+
+  function newAndClose() {
+    onNew()
+    onClose?.()
+  }
+
+  function logoutAndClose() {
+    onLogout()
+    onClose?.()
+  }
+
+  useEffect(() => {
+    if (variant !== 'drawer' || !open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose?.()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [variant, open, onClose])
+
+  const aside = (
+    <aside
+      className={cn(
+        'sidebar',
+        variant === 'drawer' && 'sidebar--drawer',
+        variant === 'drawer' && open && 'is-open',
+      )}
+      id="chat-sidebar"
+      aria-hidden={variant === 'drawer' && !open ? true : undefined}
+    >
       <div className="sidebar-brand">
-        <a href="/" className="brand-link" title="Back to dashboard">
-          <span className="brand-accent">8090</span> Chat
-        </a>
+        <div className="sidebar-brand-row">
+          <a href="/" className="brand-link" title="Back to dashboard">
+            <span className="brand-accent">8090</span> Chat
+          </a>
+          {variant === 'drawer' ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="sidebar-drawer-close"
+              aria-label="Close sidebar"
+              onClick={() => onClose?.()}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
         <div className="sidebar-sub muted">Agent workspace</div>
       </div>
 
       <div className="sidebar-top">
-        <Button className="w-full" onClick={onNew}>
+        <Button className="w-full" onClick={newAndClose}>
           + New chat
         </Button>
         <label className="sidebar-search">
@@ -117,11 +171,11 @@ export function Sidebar({
               <div
                 key={s.id}
                 className={`session-item ${s.id === activeId ? 'active' : ''} ${s.pinned ? 'pinned' : ''}`}
-                onClick={() => onSelect(s.id)}
+                onClick={() => selectAndClose(s.id)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') onSelect(s.id)
+                  if (e.key === 'Enter' || e.key === ' ') selectAndClose(s.id)
                 }}
               >
                 {editingId === s.id ? (
@@ -205,7 +259,7 @@ export function Sidebar({
             : ''}
         </div>
         <Tooltip content="Clear local token and return to login">
-          <Button variant="ghost" className="w-full justify-start" onClick={onLogout}>
+          <Button variant="ghost" className="w-full justify-start" onClick={logoutAndClose}>
             <LogOut className="mr-2 h-4 w-4" />
             Log out
           </Button>
@@ -213,4 +267,24 @@ export function Sidebar({
       </div>
     </aside>
   )
+
+  if (variant === 'drawer') {
+    return (
+      <div
+        className={cn('sidebar-drawer-root', open && 'is-open')}
+        aria-hidden={!open}
+      >
+        <button
+          type="button"
+          className="sidebar-drawer-backdrop"
+          aria-label="Close sidebar"
+          tabIndex={open ? 0 : -1}
+          onClick={() => onClose?.()}
+        />
+        {aside}
+      </div>
+    )
+  }
+
+  return aside
 }

@@ -493,6 +493,98 @@ textarea {
   padding: 0 0.15rem;
 }
 
+.sidebar-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.sidebar-drawer-close {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.sidebar-drawer-root {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+}
+
+.sidebar-drawer-root.is-open {
+  pointer-events: auto;
+}
+
+.sidebar-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.4);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.sidebar-drawer-root.is-open .sidebar-drawer-backdrop {
+  opacity: 1;
+}
+
+.sidebar.sidebar--drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(86vw, 320px);
+  max-width: 320px;
+  transform: translateX(-105%);
+  transition: transform 0.2s ease;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-shadow: var(--shadow-lg);
+  z-index: 1;
+}
+
+.sidebar.sidebar--drawer.is-open {
+  transform: translateX(0);
+}
+
+/* Drawer: always show session action buttons (no hover gate) */
+.sidebar--drawer .session-actions {
+  opacity: 1;
+}
+
+.sidebar--drawer .session-item {
+  min-height: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar.sidebar--drawer,
+  .sidebar-drawer-backdrop {
+    transition: none;
+  }
+}
+
+/* Compact shell: chat column takes full width when sidebar is drawer */
+@media (max-width: 1024px) {
+  .app-shell {
+    position: relative;
+  }
+
+  .chat-view {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+.header-menu-btn {
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+}
+
 /* Chat main */
 .chat-view {
   flex: 1;

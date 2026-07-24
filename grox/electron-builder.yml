@@ -1,0 +1,28 @@
+appId: app.grox.desktop
+productName: Grox
+directories:
+  output: release
+  buildResources: resources
+files:
+  - electron/dist/**
+  - electron/package.json
+extraResources:
+  - from: agent/dist/agent-sidecar
+    to: sidecar
+  - from: resources/icon.png
+    to: icon.png
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: Grox-Setup-${version}.${ext}
+  icon: resources/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: Grox
+linux:
+  # Optional smoke packaging on Linux hosts; final ship target is Windows NSIS.
+  target:
+    - dir
+  category: Development

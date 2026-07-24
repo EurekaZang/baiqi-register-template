@@ -51,5 +51,38 @@ sidecar supervisor, or keep `npm run dev` running and attach.
 | `npm run dev` | Agent + Vite |
 | `npm run build:ui` | Build SPA (`-w grox-ui`) |
 | `npm run build:electron` | Compile Electron main/preload |
-| `npm run build:win` | Windows package (Task 9+) |
+| `npm run build:win` | Windows package (`scripts/build-win.mjs`) |
 | `npm run test:agent` | pytest in agent venv |
+
+## Packaging (Windows NSIS)
+
+Pipeline (`npm run build:win` → `scripts/build-win.mjs`):
+
+1. `npm run build -w grox-ui` → `ui/dist`
+2. Copy `ui/dist` → `agent/static` (sidecar serves the SPA in packaged mode)
+3. **Expect** prebuilt PyInstaller onedir at `agent/dist/agent-sidecar/`
+4. `npm run build -w electron` → `electron/dist`
+5. `electron-builder --win` using `electron-builder.yml` → `release/Grox-Setup-*.exe`
+
+### Sidecar (must be Windows-native for ship)
+
+```bat
+cd grox\agent
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt pyinstaller
+.venv\Scripts\pyinstaller build_sidecar.spec --noconfirm
+```
+
+Produces `agent/dist/agent-sidecar/` (onedir + `agent-sidecar.exe`). A Linux
+PyInstaller smoke build is useful for CI health checks only — **do not ship** a
+Linux `claude` binary inside a Windows installer.
+
+### Final NSIS host requirement
+
+**Build the ship installer on real Windows 11** (or GitHub `windows-latest`).
+Wine/`--win` from Linux is optional for experimentation and is **not** the
+supported release path. Code signing is phase 2.
+
+Config: `electron-builder.yml` (`appId: app.grox.desktop`, NSIS non-oneClick,
+extraResources sidecar → `resources/sidecar`). Placeholder icon:
+`resources/icon.png`.

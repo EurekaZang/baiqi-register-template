@@ -54,6 +54,6 @@ def login(payload: LoginRequest, response: Response) -> dict[str, bool]:
         value=payload.token,
         httponly=True,
         samesite="lax",
-        path="/chat",
+        path="/",
     )
     return {"ok": True}

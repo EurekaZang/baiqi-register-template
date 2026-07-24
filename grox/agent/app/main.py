@@ -7,11 +7,17 @@ from .agent_bridge import router as agent_router
 from .auth import LoginRequest, login
 from .config import settings
 from .models_api import router as models_router
+from .runtime_config import bootstrap_from_disk
+from .runtime_config import router as runtime_config_router
 from .sessions import router as sessions_router
+
+# Load persisted base URL / API key / default model before serving requests.
+bootstrap_from_disk()
 
 app = FastAPI(title="Grox Agent", root_path=settings.chat_root_path)
 app.include_router(sessions_router)
 app.include_router(models_router)
+app.include_router(runtime_config_router)
 app.include_router(agent_router)
 
 

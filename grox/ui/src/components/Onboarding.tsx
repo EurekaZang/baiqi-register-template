@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { putRuntimeConfig } from '../api'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 
@@ -41,7 +42,7 @@ export function Onboarding({ onComplete }: Props) {
     }
     setBusy(true)
     try {
-      // Interim localStorage until Task 5 lands PUT /api/runtime-config.
+      await putRuntimeConfig({ base_url: url, api_key: key })
       try {
         localStorage.setItem('grox_base_url', url)
         localStorage.setItem('grox_api_key', key)

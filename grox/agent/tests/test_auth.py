@@ -35,7 +35,7 @@ def test_login_sets_chat_token_cookie(monkeypatch):
     assert "chat_token=secret-token" in set_cookie
     assert "HttpOnly" in set_cookie
     assert "SameSite=lax" in set_cookie
-    assert "Path=/chat" in set_cookie
+    assert "Path=/" in set_cookie
 
 
 def test_login_rejects_invalid_token(monkeypatch):

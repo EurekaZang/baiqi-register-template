@@ -226,20 +226,45 @@ export async function login(token: string): Promise<void> {
   const previous = getToken()
   setToken(token)
   try {
-    // Probe auth via sessions; also hit login for cookie (optional path=/chat)
+    // Probe auth via sessions; also hit login for cookie (path=/)
     try {
       await apiFetch('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ token }),
       })
     } catch {
-      // Cookie login may fail on direct 8091 without /chat path; bearer still works
+      // Cookie login optional; bearer still works
     }
     await apiFetch<SessionSummary[]>('/sessions')
   } catch (err) {
     setToken(previous)
     throw err
   }
+}
+
+export type RuntimeConfig = {
+  base_url: string
+  api_key_set: boolean
+  default_model: string
+}
+
+export type RuntimeConfigUpdate = {
+  base_url?: string
+  api_key?: string
+  default_model?: string
+}
+
+export async function getRuntimeConfig(): Promise<RuntimeConfig> {
+  return apiFetch<RuntimeConfig>('/runtime-config')
+}
+
+export async function putRuntimeConfig(
+  body: RuntimeConfigUpdate,
+): Promise<RuntimeConfig> {
+  return apiFetch<RuntimeConfig>('/runtime-config', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function listSessions(): Promise<SessionSummary[]> {

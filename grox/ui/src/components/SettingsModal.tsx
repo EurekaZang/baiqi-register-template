@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { FolderOpen, X } from 'lucide-react'
+import { getRuntimeConfig, putRuntimeConfig } from '../api'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 
@@ -18,6 +19,7 @@ type Props = {
 export function SettingsModal({ open, onClose }: Props) {
   const [baseUrl, setBaseUrl] = useState(DEFAULT_BASE_URL)
   const [apiKey, setApiKey] = useState('')
+  const [apiKeySet, setApiKeySet] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -25,16 +27,34 @@ export function SettingsModal({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!open) return
-    try {
-      setBaseUrl(localStorage.getItem('grox_base_url') || DEFAULT_BASE_URL)
-      setApiKey(localStorage.getItem('grox_api_key') || '')
-    } catch {
-      setBaseUrl(DEFAULT_BASE_URL)
-      setApiKey('')
-    }
+    let cancelled = false
     setError(null)
     setSaved(false)
+    setApiKey('')
+    ;(async () => {
+      try {
+        const cfg = await getRuntimeConfig()
+        if (cancelled) return
+        setBaseUrl(cfg.base_url || DEFAULT_BASE_URL)
+        setApiKeySet(Boolean(cfg.api_key_set))
+      } catch {
+        if (cancelled) return
+        try {
+          setBaseUrl(localStorage.getItem('grox_base_url') || DEFAULT_BASE_URL)
+          const localKey = localStorage.getItem('grox_api_key') || ''
+          setApiKey(localKey)
+          setApiKeySet(Boolean(localKey.trim()))
+        } catch {
+          setBaseUrl(DEFAULT_BASE_URL)
+          setApiKey('')
+          setApiKeySet(false)
+        }
+      }
+    })()
     requestAnimationFrame(() => closeBtnRef.current?.focus())
+    return () => {
+      cancelled = true
+    }
   }, [open])
 
   useEffect(() => {
@@ -56,16 +76,26 @@ export function SettingsModal({ open, onClose }: Props) {
       setError('Base URL is required')
       return
     }
-    if (!key) {
+    if (!key && !apiKeySet) {
       setError('API Key is required')
       return
     }
     setBusy(true)
     try {
-      // Interim localStorage until Task 5 lands PUT /api/runtime-config.
-      localStorage.setItem('grox_base_url', url)
-      localStorage.setItem('grox_api_key', key)
-      localStorage.setItem('grox_onboarded', '1')
+      const body: { base_url: string; api_key?: string } = { base_url: url }
+      if (key) body.api_key = key
+      await putRuntimeConfig(body)
+      try {
+        localStorage.setItem('grox_base_url', url)
+        if (key) localStorage.setItem('grox_api_key', key)
+        localStorage.setItem('grox_onboarded', '1')
+      } catch {
+        /* ignore */
+      }
+      if (key) {
+        setApiKeySet(true)
+        setApiKey('')
+      }
       setSaved(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save settings')
@@ -133,7 +163,7 @@ export function SettingsModal({ open, onClose }: Props) {
             />
           </label>
           <label className="field">
-            <span>API Key</span>
+            <span>API Key{apiKeySet ? ' (leave blank to keep)' : ''}</span>
             <Input
               type="password"
               value={apiKey}
@@ -141,10 +171,10 @@ export function SettingsModal({ open, onClose }: Props) {
                 setApiKey(e.target.value)
                 setSaved(false)
               }}
-              placeholder="sk-…"
+              placeholder={apiKeySet ? '•••••••• (set)' : 'sk-…'}
               disabled={busy}
               autoComplete="off"
-              required
+              required={!apiKeySet}
             />
           </label>
           <p className="settings-note muted">
@@ -152,7 +182,7 @@ export function SettingsModal({ open, onClose }: Props) {
           </p>
           {error ? <div className="error-banner settings-error">{error}</div> : null}
           {saved ? (
-            <div className="settings-saved muted">Saved locally.</div>
+            <div className="settings-saved muted">Saved to agent process.</div>
           ) : null}
           <div className="settings-actions">
             <Button
@@ -164,7 +194,10 @@ export function SettingsModal({ open, onClose }: Props) {
               <FolderOpen className="mr-2 h-4 w-4" />
               Open data folder
             </Button>
-            <Button type="submit" disabled={busy || !baseUrl.trim() || !apiKey.trim()}>
+            <Button
+              type="submit"
+              disabled={busy || !baseUrl.trim() || (!apiKey.trim() && !apiKeySet)}
+            >
               {busy ? 'Saving…' : 'Save'}
             </Button>
           </div>

@@ -167,6 +167,7 @@ export default function App() {
         onSessionUpdated={handleSessionUpdated}
         isCompact={isCompact}
         onOpenSidebar={() => setSidebarOpen(true)}
+        sidebarOpen={isCompact ? sidebarOpen : false}
       />
     </div>
   )

@@ -19,18 +19,26 @@ import {
   type ToolCard,
 } from '../api'
 import type { SendPayload } from './Composer'
-import { Boxes, Menu } from 'lucide-react'
+import { Boxes, Menu, MoreHorizontal } from 'lucide-react'
 import { extractArtifacts, type Artifact } from '../lib/content'
 import { ArtifactsPanel } from './ArtifactsPanel'
 import { Composer } from './Composer'
 import { ContextUsageMeter } from './ContextUsage'
 import { CwdPicker } from './CwdPicker'
 import { MessageList, type StreamState } from './MessageList'
+import { MobileSheet } from './MobileSheet'
 import { ModelSelect } from './ModelSelect'
 import { TasksPanel } from './TasksPanel'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Tooltip } from './ui/tooltip'
+
+function shortPath(path: string): string {
+  if (!path) return ''
+  const parts = path.replace(/\/+$/, '').split('/').filter(Boolean)
+  if (parts.length <= 3) return path
+  return `…/${parts.slice(-3).join('/')}`
+}
 
 function upsertSubagentOnTools(
   tools: ToolCard[],
@@ -113,6 +121,7 @@ type Props = {
   defaultModel?: string
   isCompact?: boolean
   onOpenSidebar?: () => void
+  sidebarOpen?: boolean
 }
 
 export function ChatView({
@@ -123,6 +132,7 @@ export function ChatView({
   defaultModel = 'grok-4.5',
   isCompact = false,
   onOpenSidebar,
+  sidebarOpen = false,
 }: Props) {
   const [session, setSession] = useState<SessionSummary | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -144,6 +154,9 @@ export function ChatView({
   const [seedText, setSeedText] = useState<string | undefined>(undefined)
   const [artifactsOpen, setArtifactsOpen] = useState(false)
   const [tasksOpen, setTasksOpen] = useState(false)
+  const [overflowOpen, setOverflowOpen] = useState(false)
+  const [cwdSheetOpen, setCwdSheetOpen] = useState(false)
+  const [contextSheetOpen, setContextSheetOpen] = useState(false)
   const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -844,7 +857,29 @@ export function ChatView({
 
   function handleOpenArtifact(a: Artifact) {
     setActiveArtifactId(a.id)
-    setArtifactsOpen(true)
+    if (isCompact) {
+      openOnly('artifacts')
+    } else {
+      setArtifactsOpen(true)
+    }
+  }
+
+  function closeAllSheets() {
+    setOverflowOpen(false)
+    setCwdSheetOpen(false)
+    setContextSheetOpen(false)
+    setTasksOpen(false)
+    setArtifactsOpen(false)
+  }
+
+  function openOnly(
+    which: 'overflow' | 'cwd' | 'context' | 'tasks' | 'artifacts',
+  ) {
+    setOverflowOpen(which === 'overflow')
+    setCwdSheetOpen(which === 'cwd')
+    setContextSheetOpen(which === 'context')
+    setTasksOpen(which === 'tasks')
+    setArtifactsOpen(which === 'artifacts')
   }
 
   const headerCwd = draftMode ? cwd : session?.cwd || cwd
@@ -856,112 +891,161 @@ export function ChatView({
       : draftMode
         ? 'New chat'
         : session?.title || 'Chat'
+  const activeTaskCount = tasks.filter(
+    (t) => (t.status || '') !== 'deleted',
+  ).length
+
   return (
     <section className={`chat-view ${artifactsOpen ? 'with-artifacts' : ''}`}>
       <div className="chat-main-col">
-        <header className="chat-header">
-          <div className="header-top">
-            <div className="header-title-row">
-              {isCompact ? (
+        {isCompact ? (
+          <header className="chat-header chat-header--compact">
+            <div className="header-top header-top--compact">
+              <div className="header-title-row">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="header-menu-btn"
                   aria-label="Open sessions"
-                  aria-expanded={false}
+                  aria-expanded={sidebarOpen}
                   aria-controls="chat-sidebar"
-                  onClick={() => onOpenSidebar?.()}
+                  onClick={() => {
+                    closeAllSheets()
+                    onOpenSidebar?.()
+                  }}
                 >
                   <Menu className="h-5 w-5" />
                 </Button>
-              ) : null}
-              <h1 className="chat-title">{title}</h1>
-              <Tooltip content="permission_mode=bypassPermissions">
-                <Badge variant="success" className="full-auto-badge">
-                  <span className="status-dot-inline ok" />
-                  Full auto
-                </Badge>
-              </Tooltip>
-              {running ? (
-                <Tooltip content="Agent turn in progress">
+                <h1 className="chat-title">{title}</h1>
+                {running ? (
                   <Badge variant="accent" className="running-badge">
                     <span className="pulse-dot" />
                     Running
                   </Badge>
-                </Tooltip>
-              ) : null}
+                ) : null}
+              </div>
+              <div className="header-actions header-actions--compact">
+                <div className="model-select-host">
+                  <ModelSelect
+                    value={headerModel}
+                    onChange={(v) => {
+                      setModel(v)
+                      if (!draftMode && sessionId) void applyModelCwd({ model: v })
+                    }}
+                    disabled={running}
+                    compact
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="header-overflow-btn"
+                  aria-label="More tools"
+                  aria-haspopup="dialog"
+                  aria-expanded={overflowOpen}
+                  onClick={() => openOnly('overflow')}
+                >
+                  <MoreHorizontal className="h-5 w-5" />
+                </Button>
+              </div>
             </div>
-            <div className="header-actions">
-              <ContextUsageMeter
-                usage={contextUsage}
-                canCompact={
-                  !draftMode &&
-                  !!session?.sdk_session_id &&
-                  (session.messages?.length || messages.length) > 0
-                }
-                compacting={compacting}
-                onCompact={
-                  running || compacting ? undefined : () => void handleCompact()
-                }
-              />
-              <TasksPanel
-                tasks={tasks}
-                open={tasksOpen}
-                onOpenChange={setTasksOpen}
+          </header>
+        ) : (
+          <header className="chat-header">
+            <div className="header-top">
+              <div className="header-title-row">
+                <h1 className="chat-title">{title}</h1>
+                <Tooltip content="permission_mode=bypassPermissions">
+                  <Badge variant="success" className="full-auto-badge">
+                    <span className="status-dot-inline ok" />
+                    Full auto
+                  </Badge>
+                </Tooltip>
+                {running ? (
+                  <Tooltip content="Agent turn in progress">
+                    <Badge variant="accent" className="running-badge">
+                      <span className="pulse-dot" />
+                      Running
+                    </Badge>
+                  </Tooltip>
+                ) : null}
+              </div>
+              <div className="header-actions">
+                <ContextUsageMeter
+                  usage={contextUsage}
+                  canCompact={
+                    !draftMode &&
+                    !!session?.sdk_session_id &&
+                    (session.messages?.length || messages.length) > 0
+                  }
+                  compacting={compacting}
+                  onCompact={
+                    running || compacting ? undefined : () => void handleCompact()
+                  }
+                />
+                <TasksPanel
+                  tasks={tasks}
+                  open={tasksOpen}
+                  onOpenChange={setTasksOpen}
+                />
+                <Tooltip
+                  content={
+                    artifactsOpen
+                      ? 'Hide artifacts panel'
+                      : 'Show artifacts panel'
+                  }
+                >
+                  <Button
+                    type="button"
+                    variant={artifactsOpen ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setArtifactsOpen((v) => !v)}
+                    className={
+                      artifactsOpen
+                        ? 'header-action-btn active-toggle'
+                        : 'header-action-btn'
+                    }
+                  >
+                    <Boxes className="h-3.5 w-3.5" />
+                    Artifacts{artifacts.length ? ` (${artifacts.length})` : ''}
+                  </Button>
+                </Tooltip>
+              </div>
+            </div>
+            <div className="header-toolbar">
+              <CwdPicker
+                value={headerCwd}
+                onChange={handleCwdDraftChange}
+                onCommit={handleCwdCommit}
+                disabled={running}
               />
               <Tooltip
                 content={
-                  artifactsOpen ? 'Hide artifacts panel' : 'Show artifacts panel'
+                  running
+                    ? 'Wait for the current turn to finish, then change model'
+                    : session?.sdk_session_id
+                      ? 'Applies to the next message (starts a fresh model session)'
+                      : 'Model for the next agent turn'
                 }
               >
-                <Button
-                  type="button"
-                  variant={artifactsOpen ? 'secondary' : 'ghost'}
-                  size="sm"
-                  onClick={() => setArtifactsOpen((v) => !v)}
-                  className={
-                    artifactsOpen
-                      ? 'header-action-btn active-toggle'
-                      : 'header-action-btn'
-                  }
-                >
-                  <Boxes className="h-3.5 w-3.5" />
-                  Artifacts{artifacts.length ? ` (${artifacts.length})` : ''}
-                </Button>
+                <div className="model-select-host">
+                  <ModelSelect
+                    value={headerModel}
+                    onChange={(v) => {
+                      setModel(v)
+                      if (!draftMode && sessionId)
+                        void applyModelCwd({ model: v })
+                    }}
+                    disabled={running}
+                    compact
+                  />
+                </div>
               </Tooltip>
             </div>
-          </div>
-          <div className="header-toolbar">
-            <CwdPicker
-              value={headerCwd}
-              onChange={handleCwdDraftChange}
-              onCommit={handleCwdCommit}
-              disabled={running}
-            />
-            <Tooltip
-              content={
-                running
-                  ? 'Wait for the current turn to finish, then change model'
-                  : session?.sdk_session_id
-                    ? 'Applies to the next message (starts a fresh model session)'
-                    : 'Model for the next agent turn'
-              }
-            >
-              <div className="model-select-host">
-                <ModelSelect
-                  value={headerModel}
-                  onChange={(v) => {
-                    setModel(v)
-                    if (!draftMode && sessionId) void applyModelCwd({ model: v })
-                  }}
-                  disabled={running}
-                  compact
-                />
-              </div>
-            </Tooltip>
-          </div>
-        </header>
+          </header>
+        )}
 
         {error && <div className="error-banner">{error}</div>}
 
@@ -978,7 +1062,8 @@ export function ChatView({
               onRetry={
                 isStreaming || loading
                   ? undefined
-                  : (userText) => void handleSend({ text: userText, attachments: [] })
+                  : (userText) =>
+                      void handleSend({ text: userText, attachments: [] })
               }
               onOpenArtifact={handleOpenArtifact}
             />
@@ -1028,13 +1113,120 @@ export function ChatView({
         />
       </div>
 
-      <ArtifactsPanel
-        artifacts={artifacts}
-        open={artifactsOpen}
-        onClose={() => setArtifactsOpen(false)}
-        activeId={activeArtifactId}
-        onSelect={setActiveArtifactId}
-      />
+      {!isCompact ? (
+        <ArtifactsPanel
+          artifacts={artifacts}
+          open={artifactsOpen}
+          onClose={() => setArtifactsOpen(false)}
+          activeId={activeArtifactId}
+          onSelect={setActiveArtifactId}
+        />
+      ) : null}
+
+      {isCompact ? (
+        <>
+          <MobileSheet
+            open={overflowOpen}
+            onClose={() => setOverflowOpen(false)}
+            title="Workspace"
+            height="auto"
+          >
+            <div className="overflow-sheet-list">
+              <button
+                type="button"
+                className="overflow-sheet-row"
+                onClick={() => openOnly('cwd')}
+              >
+                <span className="overflow-sheet-label">Working directory</span>
+                <span className="overflow-sheet-meta mono">
+                  {headerCwd ? shortPath(headerCwd) : 'Not set'}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="overflow-sheet-row"
+                onClick={() => openOnly('context')}
+              >
+                <span className="overflow-sheet-label">Context</span>
+                <span className="overflow-sheet-meta">
+                  {contextUsage?.max_tokens
+                    ? `${Math.round(contextUsage.percentage ?? 0)}%`
+                    : '—'}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="overflow-sheet-row"
+                onClick={() => openOnly('tasks')}
+              >
+                <span className="overflow-sheet-label">Tasks</span>
+                <span className="overflow-sheet-meta">{activeTaskCount}</span>
+              </button>
+              <button
+                type="button"
+                className="overflow-sheet-row"
+                onClick={() => openOnly('artifacts')}
+              >
+                <span className="overflow-sheet-label">Artifacts</span>
+                <span className="overflow-sheet-meta">{artifacts.length}</span>
+              </button>
+              <div className="overflow-sheet-note muted">
+                Full auto · permission_mode=bypassPermissions
+              </div>
+            </div>
+          </MobileSheet>
+
+          {cwdSheetOpen ? (
+            <MobileSheet
+              open
+              onClose={() => setCwdSheetOpen(false)}
+              title="Working directory"
+              height="auto"
+            >
+              <p className="muted">Cwd editor lands in Task 5</p>
+            </MobileSheet>
+          ) : null}
+
+          {contextSheetOpen ? (
+            <MobileSheet
+              open
+              onClose={() => setContextSheetOpen(false)}
+              title="Context"
+              height="auto"
+            >
+              <p className="muted">Context sheet lands in Task 5</p>
+            </MobileSheet>
+          ) : null}
+
+          {tasksOpen ? (
+            <MobileSheet
+              open
+              onClose={() => setTasksOpen(false)}
+              title="Tasks"
+              height="auto"
+            >
+              <p className="muted">
+                Tasks sheet lands in Task 5
+                {activeTaskCount ? ` · ${activeTaskCount} tasks` : ''}
+              </p>
+            </MobileSheet>
+          ) : null}
+
+          {artifactsOpen ? (
+            <MobileSheet
+              open
+              onClose={() => setArtifactsOpen(false)}
+              title="Artifacts"
+              height="auto"
+            >
+              <p className="muted">
+                Artifacts sheet lands in Task 5
+                {artifacts.length ? ` · ${artifacts.length} artifacts` : ''}
+              </p>
+            </MobileSheet>
+          ) : null}
+        </>
+      ) : null}
     </section>
   )
 }

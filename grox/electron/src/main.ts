@@ -13,6 +13,7 @@ let sidecar: SidecarHandle | null = null
 let localToken = ''
 let apiPort = PREFERRED_PORT
 let dataDir = ''
+let defaultCwd = ''
 let quitting = false
 
 function projectRoot(): string {
@@ -107,6 +108,7 @@ async function createWindow(): Promise<void> {
       additionalArguments: [
         `--grox-api-base=${exposedApiBase}`,
         `--grox-token=${localToken}`,
+        `--grox-default-cwd=${defaultCwd}`,
       ],
     },
   })
@@ -125,6 +127,8 @@ async function createWindow(): Promise<void> {
 
 async function boot(): Promise<void> {
   dataDir = ensureDataDir(app.getPath('userData'))
+  defaultCwd = path.join(app.getPath('documents'), 'Grox Workspace')
+  fs.mkdirSync(defaultCwd, { recursive: true })
   const cfg = loadConfig(dataDir)
   localToken = crypto.randomBytes(24).toString('hex')
 

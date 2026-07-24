@@ -11,6 +11,8 @@ export type GroxBridge = {
   apiBase?: string
   /** Local chat token string, or async getter for older bridges. */
   token?: string | (() => Promise<string | null | undefined>)
+  /** Desktop-created workspace used when the user has not selected a cwd yet. */
+  defaultCwd?: string
   selectFolder?: () => Promise<string | null>
   openDataDir?: () => void | Promise<void>
   getVersion?: () => Promise<string>
@@ -18,6 +20,12 @@ export type GroxBridge = {
 
 export function getGroxBridge(): GroxBridge | undefined {
   return (window as unknown as { grox?: GroxBridge }).grox
+}
+
+/** Return the desktop workspace fallback without overriding a user-selected cwd. */
+export function getDefaultCwd(): string {
+  const cwd = getGroxBridge()?.defaultCwd
+  return typeof cwd === 'string' ? cwd.trim() : ''
 }
 
 /** API root: Electron may inject `window.grox.apiBase`; else Vite BASE_URL + `api`. */

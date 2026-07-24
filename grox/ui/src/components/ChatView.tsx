@@ -4,6 +4,7 @@ import {
   compactSession,
   createSession,
   generateSessionImage,
+  getDefaultCwd,
   getSession,
   patchSession,
   resolveSessionPath,
@@ -193,9 +194,9 @@ export function ChatView({
   const [compacting, setCompacting] = useState(false)
   const [cwd, setCwd] = useState(() => {
     try {
-      return localStorage.getItem('chat_last_cwd') || ''
+      return localStorage.getItem('chat_last_cwd') || getDefaultCwd()
     } catch {
-      return ''
+      return getDefaultCwd()
     }
   })
   const [model, setModel] = useState(defaultModel)
@@ -247,9 +248,9 @@ export function ChatView({
       setCompacting(false)
       // Restore last cwd for new draft instead of wiping it.
       try {
-        setCwd(localStorage.getItem('chat_last_cwd') || '')
+        setCwd(localStorage.getItem('chat_last_cwd') || getDefaultCwd())
       } catch {
-        setCwd('')
+        setCwd(getDefaultCwd())
       }
       setModel(defaultModel)
       // Detach UI from any background stream; do not abort the agent turn.

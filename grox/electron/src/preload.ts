@@ -13,12 +13,15 @@ function argValue(name: string): string | undefined {
 
 const apiBase = argValue('grox-api-base') ?? ''
 const token = argValue('grox-token') ?? ''
+const defaultCwd = argValue('grox-default-cwd') ?? ''
 
 contextBridge.exposeInMainWorld('grox', {
   /** Origin only, e.g. http://127.0.0.1:17890 — empty in Vite-proxy dev. */
   apiBase,
   /** Local loopback chat token (string). */
   token,
+  /** Ready-to-use workspace created under the current user's Documents folder. */
+  defaultCwd,
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('grox:selectFolder'),
   openDataDir: (): Promise<void> => ipcRenderer.invoke('grox:openDataDir'),
   getVersion: (): Promise<string> => ipcRenderer.invoke('grox:getVersion'),

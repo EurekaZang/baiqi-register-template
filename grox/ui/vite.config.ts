@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: '/chat/',
+  base: '/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -14,10 +14,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/chat/api': {
-        target: 'http://127.0.0.1:8091',
-        rewrite: (p) => p.replace(/^\/chat/, ''),
-      },
+      '/api': 'http://127.0.0.1:17890',
     },
   },
   build: { outDir: 'dist', emptyOutDir: true },

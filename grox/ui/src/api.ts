@@ -1,12 +1,13 @@
-/** API client for chat-service. Base path respects Vite `base` (/chat/). */
+/** API client for Grox desktop agent. Base path respects Vite `base` (`/`). */
 
 const TOKEN_KEY = 'chat_token'
 
-/** API root: with base `/chat/` → `/chat/api` (works behind 8090 proxy). */
+/** API root: Electron may inject `window.grox.apiBase`; else Vite BASE_URL + `api`. */
 export function apiBase(): string {
+  const w = window as unknown as { grox?: { apiBase?: string } }
+  if (w.grox?.apiBase) return w.grox.apiBase.replace(/\/?$/, '') + '/api'
   const base = import.meta.env.BASE_URL || '/'
-  // BASE_URL is like `/chat/` — join to `/chat/api`
-  return `${base.replace(/\/?$/, '/') }api`
+  return `${base.replace(/\/?$/, '/')}api`
 }
 
 let memoryToken: string | null = null

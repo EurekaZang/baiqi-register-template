@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { LogOut, Pin, PinOff, Pencil, Trash2, X } from 'lucide-react'
 import type { SessionSummary } from '../api'
 import { groupSessionsByDay } from '../lib/content'
@@ -56,6 +56,7 @@ export function Sidebar({
   const [query, setQuery] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draftTitle, setDraftTitle] = useState('')
+  const closeBtnRef = useRef<HTMLButtonElement>(null)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -108,6 +109,12 @@ export function Sidebar({
     return () => window.removeEventListener('keydown', onKey)
   }, [variant, open, onClose])
 
+  // Move focus into the drawer when it opens (close control is first actionable).
+  useEffect(() => {
+    if (variant !== 'drawer' || !open) return
+    closeBtnRef.current?.focus()
+  }, [variant, open])
+
   const aside = (
     <aside
       className={cn(
@@ -125,6 +132,7 @@ export function Sidebar({
           </a>
           {variant === 'drawer' ? (
             <Button
+              ref={closeBtnRef}
               type="button"
               variant="ghost"
               size="sm"
@@ -273,6 +281,8 @@ export function Sidebar({
       <div
         className={cn('sidebar-drawer-root', open && 'is-open')}
         aria-hidden={!open}
+        // Closed drawer must not contribute focusable controls to tab order.
+        inert={!open ? true : undefined}
       >
         <button
           type="button"

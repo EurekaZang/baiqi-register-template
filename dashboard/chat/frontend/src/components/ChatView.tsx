@@ -23,7 +23,7 @@ import { Boxes, Menu, MoreHorizontal } from 'lucide-react'
 import { extractArtifacts, type Artifact } from '../lib/content'
 import { ArtifactsPanel } from './ArtifactsPanel'
 import { Composer } from './Composer'
-import { ContextUsageMeter } from './ContextUsage'
+import { ContextUsageDetail, ContextUsageMeter } from './ContextUsage'
 import { CwdPicker } from './CwdPicker'
 import { MessageList, type StreamState } from './MessageList'
 import { MobileSheet } from './MobileSheet'
@@ -1120,6 +1120,7 @@ export function ChatView({
           onClose={() => setArtifactsOpen(false)}
           activeId={activeArtifactId}
           onSelect={setActiveArtifactId}
+          presentation="dock"
         />
       ) : null}
 
@@ -1176,55 +1177,58 @@ export function ChatView({
             </div>
           </MobileSheet>
 
-          {cwdSheetOpen ? (
-            <MobileSheet
-              open
-              onClose={() => setCwdSheetOpen(false)}
-              title="Working directory"
-              height="auto"
-            >
-              <p className="muted">Cwd editor lands in Task 5</p>
-            </MobileSheet>
-          ) : null}
+          <MobileSheet
+            open={cwdSheetOpen}
+            onClose={() => setCwdSheetOpen(false)}
+            title="Working directory"
+            height="auto"
+          >
+            <CwdPicker
+              value={headerCwd}
+              onChange={handleCwdDraftChange}
+              onCommit={(v) => {
+                handleCwdCommit(v)
+              }}
+              disabled={running}
+              className="cwd-picker--sheet"
+            />
+          </MobileSheet>
 
-          {contextSheetOpen ? (
-            <MobileSheet
-              open
-              onClose={() => setContextSheetOpen(false)}
-              title="Context"
-              height="auto"
-            >
-              <p className="muted">Context sheet lands in Task 5</p>
-            </MobileSheet>
-          ) : null}
+          <MobileSheet
+            open={contextSheetOpen}
+            onClose={() => setContextSheetOpen(false)}
+            title="Context"
+            height="auto"
+          >
+            <ContextUsageDetail
+              usage={contextUsage}
+              canCompact={
+                !draftMode &&
+                !!session?.sdk_session_id &&
+                (session.messages?.length || messages.length) > 0
+              }
+              compacting={compacting}
+              onCompact={
+                running || compacting ? undefined : () => void handleCompact()
+              }
+            />
+          </MobileSheet>
 
-          {tasksOpen ? (
-            <MobileSheet
-              open
-              onClose={() => setTasksOpen(false)}
-              title="Tasks"
-              height="auto"
-            >
-              <p className="muted">
-                Tasks sheet lands in Task 5
-                {activeTaskCount ? ` · ${activeTaskCount} tasks` : ''}
-              </p>
-            </MobileSheet>
-          ) : null}
+          <TasksPanel
+            tasks={tasks}
+            open={tasksOpen}
+            onOpenChange={(v) => (v ? openOnly('tasks') : setTasksOpen(false))}
+            presentation="sheet"
+          />
 
-          {artifactsOpen ? (
-            <MobileSheet
-              open
-              onClose={() => setArtifactsOpen(false)}
-              title="Artifacts"
-              height="auto"
-            >
-              <p className="muted">
-                Artifacts sheet lands in Task 5
-                {artifacts.length ? ` · ${artifacts.length} artifacts` : ''}
-              </p>
-            </MobileSheet>
-          ) : null}
+          <ArtifactsPanel
+            artifacts={artifacts}
+            open={artifactsOpen}
+            onClose={() => setArtifactsOpen(false)}
+            activeId={activeArtifactId}
+            onSelect={setActiveArtifactId}
+            presentation="sheet"
+          />
         </>
       ) : null}
     </section>

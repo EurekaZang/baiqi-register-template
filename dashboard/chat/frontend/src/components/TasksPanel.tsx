@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { ScrollArea } from './ui/scroll-area'
 import { Separator } from './ui/separator'
 import { Tooltip } from './ui/tooltip'
+import { MobileSheet } from './MobileSheet'
 import { cn } from '../lib/utils'
 
 type Props = {
@@ -22,6 +23,7 @@ type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   className?: string
+  presentation?: 'popover' | 'sheet'
 }
 
 function statusMeta(status?: string): {
@@ -62,7 +64,13 @@ function statusMeta(status?: string): {
   }
 }
 
-export function TasksPanel({ tasks, open, onOpenChange, className }: Props) {
+export function TasksPanel({
+  tasks,
+  open,
+  onOpenChange,
+  className,
+  presentation = 'popover',
+}: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [listParent] = useAutoAnimate({ duration: 180, easing: 'ease-out' })
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -86,6 +94,7 @@ export function TasksPanel({ tasks, open, onOpenChange, className }: Props) {
     null
 
   useEffect(() => {
+    if (presentation === 'sheet') return
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onOpenChange(false)
@@ -103,7 +112,97 @@ export function TasksPanel({ tasks, open, onOpenChange, className }: Props) {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('mousedown', onPointer)
     }
-  }, [open, onOpenChange])
+  }, [open, onOpenChange, presentation])
+
+  const listBody =
+    total === 0 ? (
+      <p className="text-xs leading-relaxed text-slate-500">
+        When the agent calls TaskCreate / TaskUpdate, tasks show here as a
+        compact checklist without covering the chat.
+      </p>
+    ) : (
+      <div className="tasks-sheet-body">
+        <div className="space-y-2 pb-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-slate-800">Checklist</span>
+            <Badge variant="accent" className="text-[10px]">
+              {completed}/{total}
+            </Badge>
+          </div>
+          <div className="tasks-progress h-1 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-sky-500 transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          {focus ? (
+            <div className="rounded-md border border-sky-100 bg-sky-50/70 px-2 py-1.5 text-[11px] text-sky-800">
+              <span className="font-semibold">Now: </span>
+              {focus.status === 'in_progress' && focus.activeForm
+                ? focus.activeForm
+                : focus.subject || `Task ${focus.id}`}
+            </div>
+          ) : null}
+        </div>
+        <ul className="divide-y divide-slate-100" ref={listParent}>
+          {visible.map((task) => {
+            const meta = statusMeta(task.status)
+            const isOpen = expandedId === String(task.id)
+            return (
+              <li key={task.id} className="task-item">
+                <button
+                  type="button"
+                  className="task-row"
+                  onClick={() => setExpandedId(isOpen ? null : String(task.id))}
+                >
+                  <span className="task-row-icon">{meta.icon}</span>
+                  <span className="task-row-main">
+                    <span className="task-row-title">
+                      {task.subject || `Task ${task.id}`}
+                    </span>
+                    {task.status === 'in_progress' && task.activeForm ? (
+                      <span className="task-row-sub">{task.activeForm}</span>
+                    ) : null}
+                  </span>
+                  <Badge variant={meta.variant} className="shrink-0 text-[10px]">
+                    {meta.short}
+                  </Badge>
+                </button>
+                {isOpen ? (
+                  <div className="task-details">
+                    {task.description ? (
+                      <p>{task.description}</p>
+                    ) : (
+                      <p className="text-slate-400">No description</p>
+                    )}
+                    <div className="task-meta-line">
+                      #{task.id}
+                      {task.provisional ? ' · provisional' : ''}
+                      {task.updated_at
+                        ? ` · ${new Date(task.updated_at).toLocaleTimeString()}`
+                        : ''}
+                    </div>
+                  </div>
+                ) : null}
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    )
+
+  if (presentation === 'sheet') {
+    return (
+      <MobileSheet
+        open={open}
+        onClose={() => onOpenChange(false)}
+        title="Tasks"
+        height="tall"
+      >
+        {listBody}
+      </MobileSheet>
+    )
+  }
 
   if (total === 0) {
     return (
@@ -137,12 +236,7 @@ export function TasksPanel({ tasks, open, onOpenChange, className }: Props) {
                 <X className="h-3.5 w-3.5" />
               </Button>
             </CardHeader>
-            <CardContent className="px-3 pb-3 pt-0">
-              <p className="text-xs leading-relaxed text-slate-500">
-                When the agent calls TaskCreate / TaskUpdate, tasks show here as a
-                compact checklist without covering the chat.
-              </p>
-            </CardContent>
+            <CardContent className="px-3 pb-3 pt-0">{listBody}</CardContent>
           </Card>
         ) : null}
       </div>

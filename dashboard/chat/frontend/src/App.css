@@ -1014,6 +1014,48 @@ textarea {
   gap: 0.45rem;
 }
 
+.cwd-picker--sheet {
+  flex-direction: column;
+  align-items: stretch;
+  max-width: none;
+  width: 100%;
+  gap: 0.65rem;
+}
+
+.cwd-picker--sheet .field.inline {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.cwd-picker--sheet .cwd-recent-wrap {
+  flex: 1 1 auto;
+  max-width: none;
+  width: 100%;
+}
+
+.artifacts-sheet-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  gap: 0.5rem;
+}
+
+.artifacts-sheet-body .artifacts-list {
+  max-height: 28vh;
+}
+
+.artifacts-sheet-body .artifact-view {
+  flex: 1;
+  min-height: 12rem;
+}
+
+.mobile-sheet-panel.artifacts-sheet .mobile-sheet-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .cwd-field {
   min-width: 0;
 }

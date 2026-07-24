@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Download Grox for Windows</title>
-  <meta name="description" content="Grox — desktop coding agent for Windows. Download the installer." />
+  <title>下载 Grox · Windows 桌面端</title>
+  <meta name="description" content="Grox — Windows 桌面编程 Agent。下载安装包，使用管理员分配的账号登录。" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Söhne:wght@400;500;600&display=swap" rel="stylesheet" />
-  <!-- Tailwind CSS (CDN) + daisyUI for polished primitives, OpenAI-like restraint via custom theme -->
+  <!-- 中文：思源宋体（标题）+ 思源黑体 / Noto Sans SC（正文）；英文数字由 Inter 点缀 -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" />
   <script>
@@ -16,7 +16,24 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif'],
+            sans: [
+              '"Noto Sans SC"',
+              'Inter',
+              '"PingFang SC"',
+              '"Hiragino Sans GB"',
+              '"Microsoft YaHei UI"',
+              '"Microsoft YaHei"',
+              'ui-sans-serif',
+              'system-ui',
+              'sans-serif',
+            ],
+            display: [
+              '"Noto Serif SC"',
+              '"Source Han Serif SC"',
+              '"Songti SC"',
+              'STSong',
+              'serif',
+            ],
             mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
           },
           colors: {
@@ -40,6 +57,7 @@
           },
           letterSpacing: {
             tightish: '-0.02em',
+            cn: '0.04em',
           },
         },
       },
@@ -48,16 +66,24 @@
   <style>
     html { scroll-behavior: smooth; }
     body {
-      font-feature-settings: "ss01" on, "cv11" on;
+      font-feature-settings: "ss01" on, "palt" on;
       -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
     .hero-grad {
       background:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,0,0,0.04), transparent 60%),
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,0,0,0.035), transparent 60%),
         #fff;
     }
-    .code-block {
-      font-variant-ligatures: none;
+    .font-display {
+      font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", STSong, serif;
+      font-weight: 600;
+    }
+    .tracking-cn-title {
+      letter-spacing: 0.06em;
+    }
+    .tracking-cn-body {
+      letter-spacing: 0.02em;
     }
     .btn-openai {
       transition: background-color .15s ease, transform .1s ease, box-shadow .15s ease;
@@ -69,7 +95,7 @@
       outline-offset: 2px;
     }
     .fade-in {
-      animation: fadeIn .6s ease both;
+      animation: fadeIn .55s ease both;
     }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(6px); }
@@ -79,7 +105,6 @@
       .fade-in { animation: none; }
       .btn-openai:hover { transform: none; }
     }
-    /* daisyUI button reset into OpenAI-ish solid black */
     .btn-primary {
       --btn-color: #0d0d0d !important;
       background-color: #0d0d0d !important;
@@ -99,162 +124,172 @@
       background: #f7f7f8 !important;
       border-color: #c5c5d2 !important;
     }
+    .code-block { font-variant-ligatures: none; }
   </style>
 </head>
-<body class="h-full bg-white text-ink-950 font-sans">
-  <!-- Top nav -->
-  <header class="sticky top-0 z-40 border-b border-ink-100/80 bg-white/80 backdrop-blur-md">
+<body class="h-full bg-white text-ink-950 font-sans tracking-cn-body">
+  <!-- 顶栏 -->
+  <header class="sticky top-0 z-40 border-b border-ink-100/80 bg-white/85 backdrop-blur-md">
     <div class="mx-auto flex h-14 max-w-5xl items-center justify-between px-5 sm:px-6">
       <a href="./" class="flex items-center gap-2.5 no-underline">
         <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-ink-950 text-[13px] font-semibold tracking-tight text-white">G</span>
-        <span class="text-[15px] font-semibold tracking-tightish text-ink-950">Grox</span>
+        <span class="font-display text-[17px] tracking-cn-title text-ink-950">Grox</span>
       </a>
       <nav class="flex items-center gap-1 sm:gap-2">
-        <a href="#install" class="btn btn-ghost btn-sm hidden rounded-full px-3 text-ink-600 hover:bg-ink-50 hover:text-ink-950 sm:inline-flex">Install</a>
-        <a href="#requirements" class="btn btn-ghost btn-sm hidden rounded-full px-3 text-ink-600 hover:bg-ink-50 hover:text-ink-950 sm:inline-flex">Requirements</a>
-        <a id="nav-dl" href="./Grox-Setup-latest.exe" class="btn btn-primary btn-sm btn-openai rounded-full px-4 font-medium normal-case">Download</a>
+        <a href="#install" class="btn btn-ghost btn-sm hidden rounded-full px-3 font-normal text-ink-600 hover:bg-ink-50 hover:text-ink-950 sm:inline-flex">安装方式</a>
+        <a href="#requirements" class="btn btn-ghost btn-sm hidden rounded-full px-3 font-normal text-ink-600 hover:bg-ink-50 hover:text-ink-950 sm:inline-flex">运行环境</a>
+        <a id="nav-dl" href="./Grox-Setup-latest.exe" class="btn btn-primary btn-sm btn-openai rounded-full px-4 font-medium normal-case tracking-wide">下载</a>
       </nav>
     </div>
   </header>
 
   <main>
-    <!-- Hero -->
+    <!-- 主视觉 -->
     <section class="hero-grad">
       <div class="mx-auto max-w-5xl px-5 pb-16 pt-16 text-center sm:px-6 sm:pb-24 sm:pt-24">
-        <p class="fade-in text-[13px] font-medium uppercase tracking-[0.14em] text-ink-400">Windows desktop</p>
-        <h1 class="fade-in mx-auto mt-4 max-w-2xl text-[2.35rem] font-semibold leading-[1.12] tracking-tightish text-ink-950 sm:text-5xl sm:leading-[1.08]" style="animation-delay:.05s">
-          Download Grox
+        <p class="fade-in text-[12px] font-medium tracking-[0.22em] text-ink-400">WINDOWS · 桌面端</p>
+        <h1 class="fade-in font-display mx-auto mt-5 max-w-2xl text-[2.4rem] leading-[1.25] tracking-cn-title text-ink-950 sm:text-[3.15rem] sm:leading-[1.22]" style="animation-delay:.05s">
+          下载 Grox
         </h1>
-        <p class="fade-in mx-auto mt-5 max-w-xl text-base leading-relaxed text-ink-500 sm:text-lg" style="animation-delay:.1s">
-          A calm coding agent for your machine. Sign in with the account your admin created—no API keys to paste.
+        <p class="fade-in mx-auto mt-6 max-w-xl text-[15px] leading-[1.85] text-ink-500 sm:text-base sm:leading-[1.9]" style="animation-delay:.1s">
+          运行在你电脑上的编程助手。使用管理员分配的账号登录即可，无需在客户端填写 API Key。
         </p>
 
-        <div class="fade-in mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row" style="animation-delay:.16s">
+        <div class="fade-in mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row" style="animation-delay:.16s">
           <a id="btn-primary-dl" href="./Grox-Setup-latest.exe"
-             class="btn btn-primary btn-openai h-12 min-w-[220px] rounded-full px-7 text-[15px] font-medium normal-case shadow-soft">
+             class="btn btn-primary btn-openai h-12 min-w-[220px] rounded-full px-7 text-[15px] font-medium normal-case tracking-wide shadow-soft">
             <svg class="h-4 w-4 opacity-90" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
               <path d="M8.75 1.75a.75.75 0 0 0-1.5 0v6.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 1 0-1.06-1.06L8.75 8.44V1.75Z"/>
               <path d="M3.5 9.75a.75.75 0 0 0-1.5 0V12A2.75 2.75 0 0 0 4.75 14.75h6.5A2.75 2.75 0 0 0 14 12V9.75a.75.75 0 0 0-1.5 0V12c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25V9.75Z"/>
             </svg>
-            Download for Windows
+            下载 Windows 安装包
           </a>
           <a href="#install"
-             class="btn btn-outline btn-openai h-12 min-w-[180px] rounded-full border px-6 text-[15px] font-medium normal-case shadow-soft">
-            One-line install
+             class="btn btn-outline btn-openai h-12 min-w-[180px] rounded-full border px-6 text-[15px] font-medium normal-case tracking-wide shadow-soft">
+            一行命令安装
           </a>
         </div>
 
-        <p id="status" class="fade-in mt-5 text-sm text-ink-400" style="animation-delay:.22s">Checking latest build…</p>
+        <p id="status" class="fade-in mt-6 text-sm text-ink-400" style="animation-delay:.22s">正在检查最新版本…</p>
         <p id="meta-line" class="mt-1.5 font-mono text-xs text-ink-300"></p>
       </div>
     </section>
 
-    <!-- Features strip -->
+    <!-- 三点说明 -->
     <section class="border-t border-ink-100">
       <div class="mx-auto grid max-w-5xl gap-px bg-ink-100 sm:grid-cols-3">
-        <div class="bg-white px-6 py-8 sm:px-8">
-          <p class="text-[13px] font-medium text-ink-400">01</p>
-          <h2 class="mt-2 text-base font-semibold tracking-tightish text-ink-950">Account login</h2>
-          <p class="mt-2 text-sm leading-relaxed text-ink-500">Sign in with the username and password your admin provisioned. No client-side API keys.</p>
+        <div class="bg-white px-6 py-9 sm:px-8">
+          <p class="font-display text-[13px] tracking-cn-title text-ink-400">壹</p>
+          <h2 class="mt-2.5 font-display text-[1.05rem] tracking-cn-title text-ink-950">账号登录</h2>
+          <p class="mt-3 text-[14px] leading-[1.85] text-ink-500">使用管理员开通的用户名与密码登录。客户端无需粘贴或保管 API Key。</p>
         </div>
-        <div class="bg-white px-6 py-8 sm:px-8">
-          <p class="text-[13px] font-medium text-ink-400">02</p>
-          <h2 class="mt-2 text-base font-semibold tracking-tightish text-ink-950">Works offline-first</h2>
-          <p class="mt-2 text-sm leading-relaxed text-ink-500">Runs as a native Windows app with a local agent process. Your workspace stays on disk.</p>
+        <div class="bg-white px-6 py-9 sm:px-8">
+          <p class="font-display text-[13px] tracking-cn-title text-ink-400">贰</p>
+          <h2 class="mt-2.5 font-display text-[1.05rem] tracking-cn-title text-ink-950">本地优先</h2>
+          <p class="mt-3 text-[14px] leading-[1.85] text-ink-500">以 Windows 原生应用运行，本地 Agent 进程协作；工作区文件保留在你的磁盘上。</p>
         </div>
-        <div class="bg-white px-6 py-8 sm:px-8">
-          <p class="text-[13px] font-medium text-ink-400">03</p>
-          <h2 class="mt-2 text-base font-semibold tracking-tightish text-ink-950">Hosted models</h2>
-          <p class="mt-2 text-sm leading-relaxed text-ink-500">Talks to your team gateway at <span class="font-mono text-[12px] text-ink-700">kaggleyes.top/grokapi</span>.</p>
+        <div class="bg-white px-6 py-9 sm:px-8">
+          <p class="font-display text-[13px] tracking-cn-title text-ink-400">叁</p>
+          <h2 class="mt-2.5 font-display text-[1.05rem] tracking-cn-title text-ink-950">团队网关</h2>
+          <p class="mt-3 text-[14px] leading-[1.85] text-ink-500">默认连接团队模型服务<br /><span class="font-mono text-[12px] tracking-normal text-ink-700">kaggleyes.top/grokapi</span></p>
         </div>
       </div>
     </section>
 
-    <!-- Install -->
-    <section id="install" class="border-t border-ink-100 bg-ink-50/60">
+    <!-- 安装 -->
+    <section id="install" class="border-t border-ink-100 bg-ink-50/50">
       <div class="mx-auto max-w-5xl px-5 py-16 sm:px-6 sm:py-20">
         <div class="max-w-2xl">
-          <h2 class="text-2xl font-semibold tracking-tightish text-ink-950 sm:text-[1.75rem]">Install</h2>
-          <p class="mt-3 text-[15px] leading-relaxed text-ink-500">
-            Prefer the installer for most people. Power users can pull the latest build with one PowerShell line.
+          <h2 class="font-display text-[1.75rem] tracking-cn-title text-ink-950 sm:text-[2rem]">安装</h2>
+          <p class="mt-4 text-[15px] leading-[1.85] text-ink-500">
+            多数用户请使用安装包。熟悉命令行时可使用 PowerShell 一行安装。
           </p>
         </div>
 
         <div class="mt-10 grid gap-5 lg:grid-cols-2">
-          <!-- Card: Installer -->
-          <article class="rounded-2xl border border-ink-100 bg-white p-6 shadow-soft sm:p-7">
+          <!-- 安装包 -->
+          <article class="rounded-2xl border border-ink-100 bg-white p-6 shadow-soft sm:p-8">
             <div class="flex items-start justify-between gap-3">
               <div>
-                <p class="text-xs font-medium uppercase tracking-[0.12em] text-ink-400">Recommended</p>
-                <h3 class="mt-1.5 text-lg font-semibold tracking-tightish text-ink-950">Windows installer</h3>
+                <p class="text-[11px] font-medium tracking-[0.18em] text-ink-400">推荐</p>
+                <h3 class="mt-2 font-display text-lg tracking-cn-title text-ink-950">Windows 安装包</h3>
               </div>
-              <span class="badge badge-ghost rounded-full border border-ink-100 bg-ink-50 px-2.5 py-1 text-[11px] font-medium text-ink-600">.exe · NSIS</span>
+              <span class="badge badge-ghost rounded-full border border-ink-100 bg-ink-50 px-2.5 py-1 font-mono text-[11px] font-medium text-ink-600">.exe · NSIS</span>
             </div>
-            <ol class="mt-5 space-y-3 text-sm leading-relaxed text-ink-600">
-              <li class="flex gap-3"><span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink-950 text-[11px] font-semibold text-white">1</span><span>Download the setup package for Windows.</span></li>
-              <li class="flex gap-3"><span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink-950 text-[11px] font-semibold text-white">2</span><span>Run the installer. If SmartScreen appears, choose <em class="not-italic text-ink-800">More info → Run anyway</em>.</span></li>
-              <li class="flex gap-3"><span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink-950 text-[11px] font-semibold text-white">3</span><span>Open Grox and sign in with your account.</span></li>
+            <ol class="mt-6 space-y-4 text-[14px] leading-[1.8] text-ink-600">
+              <li class="flex gap-3">
+                <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-950 font-display text-[12px] text-white">1</span>
+                <span>下载 Windows 安装程序。</span>
+              </li>
+              <li class="flex gap-3">
+                <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-950 font-display text-[12px] text-white">2</span>
+                <span>运行安装。若出现 SmartScreen，选择<span class="text-ink-800">「更多信息 → 仍要运行」</span>。</span>
+              </li>
+              <li class="flex gap-3">
+                <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-950 font-display text-[12px] text-white">3</span>
+                <span>打开 Grox，使用管理员分配的账号登录。</span>
+              </li>
             </ol>
             <a id="btn-card-dl" href="./Grox-Setup-latest.exe"
-               class="btn btn-primary btn-openai mt-7 h-11 w-full rounded-full text-[14px] font-medium normal-case">
-              Download installer
+               class="btn btn-primary btn-openai mt-8 h-11 w-full rounded-full text-[14px] font-medium normal-case tracking-wide">
+              下载安装包
             </a>
             <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-400">
-              <a id="link-versioned" href="./Grox-Setup-0.1.1.exe" class="underline-offset-2 hover:text-ink-700 hover:underline">Versioned file</a>
-              <a href="./latest.json" class="underline-offset-2 hover:text-ink-700 hover:underline">latest.json</a>
+              <a id="link-versioned" href="./Grox-Setup-0.1.1.exe" class="underline-offset-4 hover:text-ink-700 hover:underline">指定版本文件</a>
+              <a href="./latest.json" class="underline-offset-4 hover:text-ink-700 hover:underline">版本元数据</a>
             </div>
           </article>
 
-          <!-- Card: PowerShell -->
-          <article class="rounded-2xl border border-ink-100 bg-white p-6 shadow-soft sm:p-7">
+          <!-- PowerShell -->
+          <article class="rounded-2xl border border-ink-100 bg-white p-6 shadow-soft sm:p-8">
             <div class="flex items-start justify-between gap-3">
               <div>
-                <p class="text-xs font-medium uppercase tracking-[0.12em] text-ink-400">PowerShell</p>
-                <h3 class="mt-1.5 text-lg font-semibold tracking-tightish text-ink-950">One-line install</h3>
+                <p class="text-[11px] font-medium tracking-[0.18em] text-ink-400">PowerShell</p>
+                <h3 class="mt-2 font-display text-lg tracking-cn-title text-ink-950">一行命令安装</h3>
               </div>
-              <span class="badge badge-ghost rounded-full border border-ink-100 bg-ink-50 px-2.5 py-1 text-[11px] font-medium text-ink-600">script</span>
+              <span class="badge badge-ghost rounded-full border border-ink-100 bg-ink-50 px-2.5 py-1 text-[11px] font-medium text-ink-600">脚本</span>
             </div>
-            <p class="mt-4 text-sm leading-relaxed text-ink-500">
-              Downloads the latest build, verifies SHA-256 when published, installs silently, and launches Grox.
+            <p class="mt-4 text-[14px] leading-[1.85] text-ink-500">
+              自动获取最新版本；若发布了 SHA-256 则校验完整性，随后静默安装并尝试启动。
             </p>
             <div class="code-block relative mt-5 overflow-hidden rounded-xl border border-ink-800 bg-ink-950 p-4 text-left shadow-lift">
-              <pre id="ps-line" class="overflow-x-auto font-mono text-[12.5px] leading-relaxed text-ink-100 sm:text-[13px]">irm https://kaggleyes.top/downloads/grox/install.ps1 | iex</pre>
+              <pre id="ps-line" class="overflow-x-auto font-mono text-[12.5px] leading-relaxed tracking-normal text-ink-100 sm:text-[13px]">irm https://kaggleyes.top/downloads/grox/install.ps1 | iex</pre>
               <button type="button" id="btn-copy"
                       class="btn btn-sm absolute right-2 top-2 h-8 rounded-lg border-0 bg-white/10 px-2.5 text-xs font-medium text-white normal-case hover:bg-white/15">
-                Copy
+                复制
               </button>
             </div>
-            <p class="mt-3 text-xs leading-relaxed text-ink-400">
-              Requires Windows 10/11 and network access to this host. Run in PowerShell (admin not required for typical installs).
+            <p class="mt-3 text-xs leading-[1.7] text-ink-400">
+              需要 Windows 10/11，并能访问本站。一般在普通 PowerShell 中即可运行（通常无需管理员）。
             </p>
-            <a href="./install.ps1" class="mt-4 inline-flex text-sm font-medium text-ink-700 underline-offset-2 hover:underline">View install.ps1</a>
+            <a href="./install.ps1" class="mt-4 inline-flex text-sm font-medium text-ink-700 underline-offset-4 hover:underline">查看 install.ps1</a>
           </article>
         </div>
       </div>
     </section>
 
-    <!-- Requirements -->
+    <!-- 环境要求 -->
     <section id="requirements" class="border-t border-ink-100 bg-white">
       <div class="mx-auto max-w-5xl px-5 py-16 sm:px-6 sm:py-20">
-        <h2 class="text-2xl font-semibold tracking-tightish text-ink-950">Requirements</h2>
+        <h2 class="font-display text-[1.75rem] tracking-cn-title text-ink-950 sm:text-[2rem]">运行环境</h2>
         <div class="mt-8 overflow-hidden rounded-2xl border border-ink-100 shadow-soft">
           <table class="table w-full text-sm">
             <tbody>
               <tr class="border-b border-ink-100 hover:bg-ink-50/50">
-                <td class="w-40 px-5 py-3.5 font-medium text-ink-700 sm:w-48">OS</td>
-                <td class="px-5 py-3.5 text-ink-500">Windows 10 or 11 · x64</td>
+                <td class="w-36 px-5 py-4 font-medium text-ink-700 sm:w-44">操作系统</td>
+                <td class="px-5 py-4 leading-relaxed text-ink-500">Windows 10 或 11 · 64 位</td>
               </tr>
               <tr class="border-b border-ink-100 hover:bg-ink-50/50">
-                <td class="px-5 py-3.5 font-medium text-ink-700">Account</td>
-                <td class="px-5 py-3.5 text-ink-500">Username &amp; password from your admin (free / plus / pro)</td>
+                <td class="px-5 py-4 font-medium text-ink-700">账号</td>
+                <td class="px-5 py-4 leading-relaxed text-ink-500">由管理员分配的用户名与密码（free / plus / pro）</td>
               </tr>
               <tr class="border-b border-ink-100 hover:bg-ink-50/50">
-                <td class="px-5 py-3.5 font-medium text-ink-700">Gateway</td>
-                <td class="px-5 py-3.5 font-mono text-[13px] text-ink-500">https://kaggleyes.top/grokapi</td>
+                <td class="px-5 py-4 font-medium text-ink-700">服务地址</td>
+                <td class="px-5 py-4 font-mono text-[13px] tracking-normal text-ink-500">https://kaggleyes.top/grokapi</td>
               </tr>
               <tr class="hover:bg-ink-50/50">
-                <td class="px-5 py-3.5 font-medium text-ink-700">Disk</td>
-                <td class="px-5 py-3.5 text-ink-500">~400&nbsp;MB free for install (includes local agent runtime)</td>
+                <td class="px-5 py-4 font-medium text-ink-700">磁盘空间</td>
+                <td class="px-5 py-4 leading-relaxed text-ink-500">约 400&nbsp;MB 可用空间（含本地 Agent 运行时）</td>
               </tr>
             </tbody>
           </table>
@@ -265,9 +300,9 @@
 
   <footer class="border-t border-ink-100 bg-white">
     <div class="mx-auto flex max-w-5xl flex-col gap-3 px-5 py-8 text-sm text-ink-400 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-      <p>© <span id="year"></span> Grox · For authorized team use</p>
+      <p>© <span id="year"></span> Grox · 仅供授权团队使用</p>
       <div class="flex flex-wrap gap-x-5 gap-y-1">
-        <a href="./latest.json" class="hover:text-ink-700">Releases metadata</a>
+        <a href="./latest.json" class="hover:text-ink-700">发布元数据</a>
         <a href="https://kaggleyes.top/" class="hover:text-ink-700">kaggleyes.top</a>
       </div>
     </div>
@@ -311,7 +346,6 @@
             versioned.textContent = file + (ver ? ' · v' + ver : '');
           }
 
-          // HEAD to confirm binary exists
           let ok = false;
           try {
             const h = await fetch(url, { method: 'HEAD', cache: 'no-store' });
@@ -321,19 +355,19 @@
           }
 
           if (ok) {
-            statusEl.textContent = 'Latest build ready' + (ver ? ' · v' + ver : '');
-            statusEl.className = 'fade-in mt-5 text-sm font-medium text-emerald-700';
+            statusEl.textContent = '最新版本可用' + (ver ? ' · v' + ver : '');
+            statusEl.className = 'fade-in mt-6 text-sm font-medium text-emerald-700';
             const bits = [];
             if (formatBytes(size)) bits.push(formatBytes(size));
             if (sha) bits.push('sha256 ' + sha.slice(0, 12) + '…');
             metaEl.textContent = bits.join(' · ');
           } else {
-            statusEl.textContent = 'Installer metadata found, but the binary is not reachable yet.';
-            statusEl.className = 'fade-in mt-5 text-sm font-medium text-amber-700';
+            statusEl.textContent = '已找到版本信息，但安装包暂时无法访问。';
+            statusEl.className = 'fade-in mt-6 text-sm font-medium text-amber-700';
           }
         } catch (e) {
-          statusEl.textContent = 'Could not load release metadata. You can still try the direct download links.';
-          statusEl.className = 'fade-in mt-5 text-sm text-ink-400';
+          statusEl.textContent = '无法加载版本信息，仍可尝试下方直接下载链接。';
+          statusEl.className = 'fade-in mt-6 text-sm text-ink-400';
         }
       }
 
@@ -341,10 +375,10 @@
         const text = document.getElementById('ps-line').textContent.trim();
         try {
           await navigator.clipboard.writeText(text);
-          this.textContent = 'Copied';
-          setTimeout(() => { this.textContent = 'Copy'; }, 1600);
+          this.textContent = '已复制';
+          setTimeout(() => { this.textContent = '复制'; }, 1600);
         } catch (_) {
-          this.textContent = 'Select & copy';
+          this.textContent = '请手动选择复制';
         }
       });
 

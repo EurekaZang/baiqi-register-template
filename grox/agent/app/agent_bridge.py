@@ -1062,7 +1062,11 @@ def clear_sdk_session_id(session: dict[str, Any]) -> dict[str, Any]:
     return session
 
 
-def build_options(session: dict[str, Any]) -> ClaudeAgentOptions:
+def build_options(
+    session: dict[str, Any],
+    *,
+    validate_resume: bool = True,
+) -> ClaudeAgentOptions:
     """Build ClaudeAgentOptions from a chat session record."""
     base_url = settings.anthropic_base_url.rstrip("/")
     os.environ["ANTHROPIC_BASE_URL"] = base_url
@@ -1096,7 +1100,10 @@ def build_options(session: dict[str, Any]) -> ClaudeAgentOptions:
     resume = session.get("sdk_session_id")
     # Only resume when the transcript exists under the current cwd. Otherwise the
     # CLI exits 1 with "No conversation found with session ID".
-    if resume and is_resumable_sdk_session(resume, session.get("cwd")):
+    if resume and (
+        not validate_resume
+        or is_resumable_sdk_session(resume, session.get("cwd"))
+    ):
         kwargs["resume"] = resume
     elif resume:
         clear_sdk_session_id(session)
@@ -1524,7 +1531,10 @@ async def run_compact_session(
 
     set_session_status(session_id, "running")
     acc = TurnAccumulator()
-    options = build_options(session)
+    # Compaction explicitly targets the SDK session stored on the record. Let
+    # the SDK report a stale id instead of silently starting a new conversation
+    # when the local transcript is unavailable to this process.
+    options = build_options(session, validate_resume=False)
     factory = client_factory or ClaudeSDKClient
     client: ClaudeSDKClient | None = None
     error_message: str | None = None

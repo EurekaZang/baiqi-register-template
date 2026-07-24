@@ -122,3 +122,36 @@ def test_bootstrap_from_disk(tmp_path, monkeypatch):
     assert settings.chat_model_router_url == "https://boot.example"
     assert settings.anthropic_api_key == "boot-key"
     assert settings.chat_default_model == "boot-model"
+
+
+def test_build_options_empty_api_key_clears_env(monkeypatch):
+    import os
+
+    from app.agent_bridge import build_options
+
+    monkeypatch.setattr(settings, "chat_permission_mode", "bypassPermissions")
+    monkeypatch.setattr(settings, "anthropic_base_url", "http://127.0.0.1:8088")
+    monkeypatch.setattr(settings, "chat_default_model", "grok-4.5")
+    monkeypatch.setattr(settings, "anthropic_api_key", "")
+    os.environ["ANTHROPIC_API_KEY"] = "stale-key-from-prior-run"
+
+    opts = build_options({"cwd": "/tmp", "model": "grok-4.5", "sdk_session_id": None})
+    assert "ANTHROPIC_API_KEY" not in os.environ
+    assert "ANTHROPIC_API_KEY" not in opts.env
+
+
+def test_put_base_url_clears_models_cache(tmp_path, monkeypatch):
+    from app import models_api
+
+    c = _client(monkeypatch, tmp_path)
+    models_api._cache_payload = {"models": [{"id": "old"}], "stale": False}
+    models_api._cache_fetched_at = 123.0
+
+    r = c.put(
+        "/api/runtime-config",
+        headers=_auth_headers(),
+        json={"base_url": "https://new-router.example"},
+    )
+    assert r.status_code == 200
+    assert models_api._cache_payload is None
+    assert models_api._cache_fetched_at is None

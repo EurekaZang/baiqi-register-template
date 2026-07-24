@@ -43,10 +43,12 @@ def load() -> dict[str, Any]:
 
 def apply_and_save(patch: dict[str, Any]) -> dict[str, Any]:
     data = load()
+    base_url_changed = False
     if "base_url" in patch and patch["base_url"]:
         data["base_url"] = str(patch["base_url"]).rstrip("/")
         settings.anthropic_base_url = data["base_url"]
         settings.chat_model_router_url = data["base_url"]
+        base_url_changed = True
     if "api_key" in patch and patch["api_key"] is not None:
         data["api_key"] = str(patch["api_key"])
         settings.anthropic_api_key = data["api_key"]
@@ -54,6 +56,13 @@ def apply_and_save(patch: dict[str, Any]) -> dict[str, Any]:
         data["default_model"] = str(patch["default_model"])
         settings.chat_default_model = data["default_model"]
     _path().write_text(json.dumps(data, indent=2), encoding="utf-8")
+    if base_url_changed:
+        try:
+            from .models_api import clear_models_cache
+        except ImportError:
+            clear_models_cache = None  # type: ignore[assignment]
+        if clear_models_cache is not None:
+            clear_models_cache()
     return public_view()
 
 

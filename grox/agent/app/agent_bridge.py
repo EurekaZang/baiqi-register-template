@@ -1066,14 +1066,16 @@ def build_options(session: dict[str, Any]) -> ClaudeAgentOptions:
     """Build ClaudeAgentOptions from a chat session record."""
     base_url = settings.anthropic_base_url.rstrip("/")
     os.environ["ANTHROPIC_BASE_URL"] = base_url
-    if settings.anthropic_api_key:
-        os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
-
     env: dict[str, str] = {
         "ANTHROPIC_BASE_URL": base_url,
     }
     if settings.anthropic_api_key:
+        os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
         env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+    else:
+        # Drop a previously set key so an empty runtime config cannot reuse it.
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        env.pop("ANTHROPIC_API_KEY", None)
     # Ensure PATH is present (SDK merges os.environ, but keep explicit for clarity)
     path = os.environ.get("PATH")
     if path:

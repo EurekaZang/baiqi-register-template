@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Grox logomark — geometric G with an agent “node” on the open path.
+  Primary brand: ink #0d0d0d + sky #0ea5e9
+  ViewBox 0 0 64 64 · safe padding for app icons
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Grox">
+  <title>Grox</title>
+  <defs>
+    <linearGradient id="g-sky" x1="12" y1="8" x2="52" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+  <!-- Soft app tile (optional backdrop; remove for bare mark) -->
+  <rect width="64" height="64" rx="16" fill="#0d0d0d"/>
+  <!-- Outer ring: continuous agent loop -->
+  <circle cx="32" cy="32" r="18.5" fill="none" stroke="#f7f7f8" stroke-width="3.25"
+          stroke-linecap="round" stroke-dasharray="92 24" stroke-dashoffset="8"/>
+  <!-- Inner geometric G spine -->
+  <path fill="none" stroke="#f7f7f8" stroke-width="3.25" stroke-linecap="round" stroke-linejoin="round"
+        d="M40.5 28.5
+           C40.5 22.2 36.1 18.5 32 18.5
+           C25.6 18.5 21 23.4 21 32
+           C21 40.6 25.6 45.5 32 45.5
+           C36.2 45.5 39.6 43.2 40.8 39.2"/>
+  <!-- G crossbar + terminal -->
+  <path fill="none" stroke="#f7f7f8" stroke-width="3.25" stroke-linecap="round" stroke-linejoin="round"
+        d="M32.5 32.5 H41.2"/>
+  <!-- Accent node: agent endpoint -->
+  <circle cx="41.2" cy="32.5" r="3.1" fill="url(#g-sky)"/>
+  <circle cx="41.2" cy="32.5" r="1.15" fill="#0d0d0d"/>
+</svg>

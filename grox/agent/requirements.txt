@@ -6,3 +6,8 @@ pydantic-settings>=2.0.0
 sse-starlette>=2.0.0
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
+
+# Packaging (optional — not required for dev):
+#   .venv/bin/pip install 'pyinstaller>=6.0'
+#   .venv/bin/pyinstaller build_sidecar.spec
+# Output: dist/agent-sidecar/ (onedir; do not commit)

@@ -21,3 +21,8 @@ dashboard/chat/.env
 
 # chat generated images (local b64 store)
 dashboard/chat/data/generated-images/
+
+# grox agent PyInstaller output
+grox/agent/build/
+grox/agent/dist/
+grox/agent/*.spec.bak

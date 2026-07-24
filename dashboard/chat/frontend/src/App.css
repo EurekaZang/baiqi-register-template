@@ -2063,6 +2063,27 @@ button.active-toggle {
   opacity: 1;
 }
 
+/* Always show message actions on compact (touch) shell */
+.app-shell.is-compact .msg-actions {
+  opacity: 1;
+}
+
+.app-shell.is-compact .msg-action-btn {
+  min-height: 44px;
+}
+
+.app-shell.is-compact .message-list {
+  padding: 1rem 0.85rem 1.5rem;
+}
+
+.app-shell.is-compact .md pre {
+  font-size: 0.8rem;
+}
+
+.app-shell.is-compact .md img {
+  max-width: 100%;
+}
+
 .msg-action-btn {
   font-size: 12px;
   min-height: 28px;
@@ -2614,6 +2635,40 @@ button.active-toggle {
   padding: 0.75rem 1rem 1rem;
   background: rgba(247, 248, 250, 0.92);
   backdrop-filter: blur(8px);
+}
+
+.composer-shell--compact {
+  padding-bottom: calc(0.65rem + env(safe-area-inset-bottom, 0px));
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+.composer-cwd-cta {
+  display: block;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto 0.45rem;
+  min-height: 44px;
+  border: 1px dashed #7dd3fc;
+  border-radius: 12px;
+  background: #f0f9ff;
+  color: #0369a1;
+  font: inherit;
+  font-weight: 650;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.composer-shell--compact .composer-actions .btn,
+.composer-shell--compact .composer-actions button {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.composer-shell--compact .composer-attach-row {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
 }
 
 .composer-hint {

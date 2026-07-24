@@ -1071,6 +1071,9 @@ export function ChatView({
         </div>
 
         <Composer
+          compact={!!isCompact}
+          missingCwd={!!isCompact && draftMode && !cwd.trim()}
+          onRequestCwd={() => openOnly('cwd')}
           disabled={loading || (draftMode && !cwd.trim()) || imageBusy}
           streaming={isStreaming}
           imageBusy={imageBusy}
@@ -1096,12 +1099,16 @@ export function ChatView({
           }
           hint={
             draftMode && !cwd.trim()
-              ? 'Set an absolute cwd above before starting.'
+              ? isCompact
+                ? undefined
+                : 'Set an absolute cwd above before starting.'
               : imageBusy
                 ? 'Generating image via grok-imagine-image-lite…'
                 : isStreaming || session?.status === 'running'
                   ? 'Agent is running in Full auto mode.'
-                  : 'Chat or switch to Image mode · paste/drop files in Chat mode.'
+                  : isCompact
+                    ? undefined
+                    : 'Chat or switch to Image mode · paste/drop files in Chat mode.'
           }
           placeholder={
             draftMode

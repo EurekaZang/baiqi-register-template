@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react'
 import type { PathAttachment } from '../api'
+import { cn } from '../lib/utils'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
@@ -50,6 +51,11 @@ type Props = {
   resolvePath?: (path: string) => Promise<PathAttachment>
   /** Upload dragged/selected browser files into session cwd. */
   uploadFile?: (file: File) => Promise<PathAttachment>
+  /** Compact layout tweaks (phone / narrow shell). */
+  compact?: boolean
+  /** Shown when cwd missing on draft. */
+  missingCwd?: boolean
+  onRequestCwd?: () => void
 }
 
 function shortName(path: string): string {
@@ -130,6 +136,9 @@ export function Composer({
   hint,
   resolvePath,
   uploadFile,
+  compact = false,
+  missingCwd = false,
+  onRequestCwd,
 }: Props) {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<PathAttachment[]>([])
@@ -350,16 +359,35 @@ export function Composer({
     ? 'Describe an image to generate…'
     : placeholder
 
+  // On compact, skip idle long hints; keep missing-cwd / busy / error-like hints.
+  const showHint =
+    !!hint &&
+    (!compact || missingCwd || !!imageBusy || !!streaming || !!pathError)
+
   return (
     <div
-      className={`composer-shell${dragOver && !imageMode ? ' is-dragover' : ''}${imageMode ? ' is-image-mode' : ''}`}
+      className={cn(
+        'composer-shell',
+        compact && 'composer-shell--compact',
+        dragOver && !imageMode && 'is-dragover',
+        imageMode && 'is-image-mode',
+      )}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
       onDragOver={onDragOver}
       onDrop={onDrop}
       onPaste={onPaste}
     >
-      {hint ? <div className="composer-hint muted">{hint}</div> : null}
+      {missingCwd ? (
+        <button
+          type="button"
+          className="composer-cwd-cta"
+          onClick={() => onRequestCwd?.()}
+        >
+          Set working directory to start chatting
+        </button>
+      ) : null}
+      {showHint ? <div className="composer-hint muted">{hint}</div> : null}
       {dragOver && !imageMode ? (
         <div className="composer-drop-overlay" aria-hidden>
           <Upload className="h-5 w-5" />

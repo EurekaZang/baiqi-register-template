@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Download Grox for Windows</title>
+  <meta name="description" content="Grox — desktop coding agent for Windows. Download the installer." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Söhne:wght@400;500;600&display=swap" rel="stylesheet" />
+  <!-- Tailwind CSS (CDN) + daisyUI for polished primitives, OpenAI-like restraint via custom theme -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif'],
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+          },
+          colors: {
+            ink: {
+              50: '#f7f7f8',
+              100: '#ececf1',
+              200: '#d9d9e3',
+              300: '#c5c5d2',
+              400: '#8e8ea0',
+              500: '#6e6e80',
+              600: '#565869',
+              700: '#40414f',
+              800: '#343541',
+              900: '#202123',
+              950: '#0d0d0d',
+            },
+          },
+          boxShadow: {
+            soft: '0 0 0 1px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06)',
+            lift: '0 0 0 1px rgba(0,0,0,0.05), 0 8px 24px rgba(0,0,0,0.08)',
+          },
+          letterSpacing: {
+            tightish: '-0.02em',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body {
+      font-feature-settings: "ss01" on, "cv11" on;
+      -webkit-font-smoothing: antialiased;
+    }
+    .hero-grad {
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,0,0,0.04), transparent 60%),
+        #fff;
+    }
+    .code-block {
+      font-variant-ligatures: none;
+    }
+    .btn-openai {
+      transition: background-color .15s ease, transform .1s ease, box-shadow .15s ease;
+    }
+    .btn-openai:hover { transform: translateY(-1px); }
+    .btn-openai:active { transform: translateY(0); }
+    .btn-openai:focus-visible {
+      outline: 2px solid #0d0d0d;
+      outline-offset: 2px;
+    }
+    .fade-in {
+      animation: fadeIn .6s ease both;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .fade-in { animation: none; }
+      .btn-openai:hover { transform: none; }
+    }
+    /* daisyUI button reset into OpenAI-ish solid black */
+    .btn-primary {
+      --btn-color: #0d0d0d !important;
+      background-color: #0d0d0d !important;
+      border-color: #0d0d0d !important;
+      color: #fff !important;
+    }
+    .btn-primary:hover {
+      background-color: #2a2a2a !important;
+      border-color: #2a2a2a !important;
+    }
+    .btn-outline {
+      background: #fff !important;
+      border-color: #d9d9e3 !important;
+      color: #0d0d0d !important;
+    }
+    .btn-outline:hover {
+      background: #f7f7f8 !important;
+      border-color: #c5c5d2 !important;
+    }
+  </style>
+</head>
+<body class="h-full bg-white text-ink-950 font-sans">
+  <!-- Top nav -->
+  <header class="sticky top-0 z-40 border-b border-ink-100/80 bg-white/80 backdrop-blur-md">
+    <div class="mx-auto flex h-14 max-w-5xl items-center justify-between px-5 sm:px-6">
+      <a href="./" class="flex items-center gap-2.5 no-underline">
+        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-ink-950 text-[13px] font-semibold tracking-tight text-white">G</span>
+        <span class="text-[15px] font-semibold tracking-tightish text-ink-950">Grox</span>
+      </a>
+      <nav class="flex items-center gap-1 sm:gap-2">
+        <a href="#install" class="btn btn-ghost btn-sm hidden rounded-full px-3 text-ink-600 hover:bg-ink-50 hover:text-ink-950 sm:inline-flex">Install</a>
+        <a href="#requirements" class="btn btn-ghost btn-sm hidden rounded-full px-3 text-ink-600 hover:bg-ink-50 hover:text-ink-950 sm:inline-flex">Requirements</a>
+        <a id="nav-dl" href="./Grox-Setup-latest.exe" class="btn btn-primary btn-sm btn-openai rounded-full px-4 font-medium normal-case">Download</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero-grad">
+      <div class="mx-auto max-w-5xl px-5 pb-16 pt-16 text-center sm:px-6 sm:pb-24 sm:pt-24">
+        <p class="fade-in text-[13px] font-medium uppercase tracking-[0.14em] text-ink-400">Windows desktop</p>
+        <h1 class="fade-in mx-auto mt-4 max-w-2xl text-[2.35rem] font-semibold leading-[1.12] tracking-tightish text-ink-950 sm:text-5xl sm:leading-[1.08]" style="animation-delay:.05s">
+          Download Grox
+        </h1>
+        <p class="fade-in mx-auto mt-5 max-w-xl text-base leading-relaxed text-ink-500 sm:text-lg" style="animation-delay:.1s">
+          A calm coding agent for your machine. Sign in with the account your admin created—no API keys to paste.
+        </p>
+
+        <div class="fade-in mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row" style="animation-delay:.16s">
+          <a id="btn-primary-dl" href="./Grox-Setup-latest.exe"
+             class="btn btn-primary btn-openai h-12 min-w-[220px] rounded-full px-7 text-[15px] font-medium normal-case shadow-soft">
+            <svg class="h-4 w-4 opacity-90" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8.75 1.75a.75.75 0 0 0-1.5 0v6.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 1 0-1.06-1.06L8.75 8.44V1.75Z"/>
+              <path d="M3.5 9.75a.75.75 0 0 0-1.5 0V12A2.75 2.75 0 0 0 4.75 14.75h6.5A2.75 2.75 0 0 0 14 12V9.75a.75.75 0 0 0-1.5 0V12c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25V9.75Z"/>
+            </svg>
+            Download for Windows
+          </a>
+          <a href="#install"
+             class="btn btn-outline btn-openai h-12 min-w-[180px] rounded-full border px-6 text-[15px] font-medium normal-case shadow-soft">
+            One-line install
+          </a>
+        </div>
+
+        <p id="status" class="fade-in mt-5 text-sm text-ink-400" style="animation-delay:.22s">Checking latest build…</p>
+        <p id="meta-line" class="mt-1.5 font-mono text-xs text-ink-300"></p>
+      </div>
+    </section>
+
+    <!-- Features strip -->
+    <section class="border-t border-ink-100">
+      <div class="mx-auto grid max-w-5xl gap-px bg-ink-100 sm:grid-cols-3">
+        <div class="bg-white px-6 py-8 sm:px-8">
+          <p class="text-[13px] font-medium text-ink-400">01</p>
+          <h2 class="mt-2 text-base font-semibold tracking-tightish text-ink-950">Account login</h2>
+          <p class="mt-2 text-sm leading-relaxed text-ink-500">Sign in with the username and password your admin provisioned. No client-side API keys.</p>
+        </div>
+        <div class="bg-white px-6 py-8 sm:px-8">
+          <p class="text-[13px] font-medium text-ink-400">02</p>
+          <h2 class="mt-2 text-base font-semibold tracking-tightish text-ink-950">Works offline-first</h2>
+          <p class="mt-2 text-sm leading-relaxed text-ink-500">Runs as a native Windows app with a local agent process. Your workspace stays on disk.</p>
+        </div>
+        <div class="bg-white px-6 py-8 sm:px-8">
+          <p class="text-[13px] font-medium text-ink-400">03</p>
+          <h2 class="mt-2 text-base font-semibold tracking-tightish text-ink-950">Hosted models</h2>
+          <p class="mt-2 text-sm leading-relaxed text-ink-500">Talks to your team gateway at <span class="font-mono text-[12px] text-ink-700">kaggleyes.top/grokapi</span>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section id="install" class="border-t border-ink-100 bg-ink-50/60">
+      <div class="mx-auto max-w-5xl px-5 py-16 sm:px-6 sm:py-20">
+        <div class="max-w-2xl">
+          <h2 class="text-2xl font-semibold tracking-tightish text-ink-950 sm:text-[1.75rem]">Install</h2>
+          <p class="mt-3 text-[15px] leading-relaxed text-ink-500">
+            Prefer the installer for most people. Power users can pull the latest build with one PowerShell line.
+          </p>
+        </div>
+
+        <div class="mt-10 grid gap-5 lg:grid-cols-2">
+          <!-- Card: Installer -->
+          <article class="rounded-2xl border border-ink-100 bg-white p-6 shadow-soft sm:p-7">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-medium uppercase tracking-[0.12em] text-ink-400">Recommended</p>
+                <h3 class="mt-1.5 text-lg font-semibold tracking-tightish text-ink-950">Windows installer</h3>
+              </div>
+              <span class="badge badge-ghost rounded-full border border-ink-100 bg-ink-50 px-2.5 py-1 text-[11px] font-medium text-ink-600">.exe · NSIS</span>
+            </div>
+            <ol class="mt-5 space-y-3 text-sm leading-relaxed text-ink-600">
+              <li class="flex gap-3"><span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink-950 text-[11px] font-semibold text-white">1</span><span>Download the setup package for Windows.</span></li>
+              <li class="flex gap-3"><span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink-950 text-[11px] font-semibold text-white">2</span><span>Run the installer. If SmartScreen appears, choose <em class="not-italic text-ink-800">More info → Run anyway</em>.</span></li>
+              <li class="flex gap-3"><span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink-950 text-[11px] font-semibold text-white">3</span><span>Open Grox and sign in with your account.</span></li>
+            </ol>
+            <a id="btn-card-dl" href="./Grox-Setup-latest.exe"
+               class="btn btn-primary btn-openai mt-7 h-11 w-full rounded-full text-[14px] font-medium normal-case">
+              Download installer
+            </a>
+            <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-400">
+              <a id="link-versioned" href="./Grox-Setup-0.1.1.exe" class="underline-offset-2 hover:text-ink-700 hover:underline">Versioned file</a>
+              <a href="./latest.json" class="underline-offset-2 hover:text-ink-700 hover:underline">latest.json</a>
+            </div>
+          </article>
+
+          <!-- Card: PowerShell -->
+          <article class="rounded-2xl border border-ink-100 bg-white p-6 shadow-soft sm:p-7">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-medium uppercase tracking-[0.12em] text-ink-400">PowerShell</p>
+                <h3 class="mt-1.5 text-lg font-semibold tracking-tightish text-ink-950">One-line install</h3>
+              </div>
+              <span class="badge badge-ghost rounded-full border border-ink-100 bg-ink-50 px-2.5 py-1 text-[11px] font-medium text-ink-600">script</span>
+            </div>
+            <p class="mt-4 text-sm leading-relaxed text-ink-500">
+              Downloads the latest build, verifies SHA-256 when published, installs silently, and launches Grox.
+            </p>
+            <div class="code-block relative mt-5 overflow-hidden rounded-xl border border-ink-800 bg-ink-950 p-4 text-left shadow-lift">
+              <pre id="ps-line" class="overflow-x-auto font-mono text-[12.5px] leading-relaxed text-ink-100 sm:text-[13px]">irm https://kaggleyes.top/downloads/grox/install.ps1 | iex</pre>
+              <button type="button" id="btn-copy"
+                      class="btn btn-sm absolute right-2 top-2 h-8 rounded-lg border-0 bg-white/10 px-2.5 text-xs font-medium text-white normal-case hover:bg-white/15">
+                Copy
+              </button>
+            </div>
+            <p class="mt-3 text-xs leading-relaxed text-ink-400">
+              Requires Windows 10/11 and network access to this host. Run in PowerShell (admin not required for typical installs).
+            </p>
+            <a href="./install.ps1" class="mt-4 inline-flex text-sm font-medium text-ink-700 underline-offset-2 hover:underline">View install.ps1</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Requirements -->
+    <section id="requirements" class="border-t border-ink-100 bg-white">
+      <div class="mx-auto max-w-5xl px-5 py-16 sm:px-6 sm:py-20">
+        <h2 class="text-2xl font-semibold tracking-tightish text-ink-950">Requirements</h2>
+        <div class="mt-8 overflow-hidden rounded-2xl border border-ink-100 shadow-soft">
+          <table class="table w-full text-sm">
+            <tbody>
+              <tr class="border-b border-ink-100 hover:bg-ink-50/50">
+                <td class="w-40 px-5 py-3.5 font-medium text-ink-700 sm:w-48">OS</td>
+                <td class="px-5 py-3.5 text-ink-500">Windows 10 or 11 · x64</td>
+              </tr>
+              <tr class="border-b border-ink-100 hover:bg-ink-50/50">
+                <td class="px-5 py-3.5 font-medium text-ink-700">Account</td>
+                <td class="px-5 py-3.5 text-ink-500">Username &amp; password from your admin (free / plus / pro)</td>
+              </tr>
+              <tr class="border-b border-ink-100 hover:bg-ink-50/50">
+                <td class="px-5 py-3.5 font-medium text-ink-700">Gateway</td>
+                <td class="px-5 py-3.5 font-mono text-[13px] text-ink-500">https://kaggleyes.top/grokapi</td>
+              </tr>
+              <tr class="hover:bg-ink-50/50">
+                <td class="px-5 py-3.5 font-medium text-ink-700">Disk</td>
+                <td class="px-5 py-3.5 text-ink-500">~400&nbsp;MB free for install (includes local agent runtime)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-ink-100 bg-white">
+    <div class="mx-auto flex max-w-5xl flex-col gap-3 px-5 py-8 text-sm text-ink-400 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <p>© <span id="year"></span> Grox · For authorized team use</p>
+      <div class="flex flex-wrap gap-x-5 gap-y-1">
+        <a href="./latest.json" class="hover:text-ink-700">Releases metadata</a>
+        <a href="https://kaggleyes.top/" class="hover:text-ink-700">kaggleyes.top</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      document.getElementById('year').textContent = String(new Date().getFullYear());
+
+      const statusEl = document.getElementById('status');
+      const metaEl = document.getElementById('meta-line');
+      const primary = document.getElementById('btn-primary-dl');
+      const navDl = document.getElementById('nav-dl');
+      const cardDl = document.getElementById('btn-card-dl');
+      const versioned = document.getElementById('link-versioned');
+
+      function setHref(url) {
+        [primary, navDl, cardDl].forEach((el) => { if (el) el.href = url; });
+      }
+
+      function formatBytes(n) {
+        if (!n || n <= 0) return '';
+        const mb = n / (1024 * 1024);
+        return mb >= 10 ? mb.toFixed(0) + ' MB' : mb.toFixed(1) + ' MB';
+      }
+
+      async function loadMeta() {
+        try {
+          const res = await fetch('./latest.json', { cache: 'no-store' });
+          if (!res.ok) throw new Error('latest.json ' + res.status);
+          const j = await res.json();
+          const url = (j.installer && j.installer.url) || './Grox-Setup-latest.exe';
+          const file = (j.installer && j.installer.filename) || 'Grox-Setup-latest.exe';
+          const ver = j.version || '';
+          const sha = (j.installer && j.installer.sha256) || '';
+          const size = (j.installer && j.installer.size_bytes) || 0;
+
+          setHref(url);
+          if (versioned && file) {
+            versioned.href = './' + file;
+            versioned.textContent = file + (ver ? ' · v' + ver : '');
+          }
+
+          // HEAD to confirm binary exists
+          let ok = false;
+          try {
+            const h = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+            ok = h.ok;
+          } catch (_) {
+            ok = false;
+          }
+
+          if (ok) {
+            statusEl.textContent = 'Latest build ready' + (ver ? ' · v' + ver : '');
+            statusEl.className = 'fade-in mt-5 text-sm font-medium text-emerald-700';
+            const bits = [];
+            if (formatBytes(size)) bits.push(formatBytes(size));
+            if (sha) bits.push('sha256 ' + sha.slice(0, 12) + '…');
+            metaEl.textContent = bits.join(' · ');
+          } else {
+            statusEl.textContent = 'Installer metadata found, but the binary is not reachable yet.';
+            statusEl.className = 'fade-in mt-5 text-sm font-medium text-amber-700';
+          }
+        } catch (e) {
+          statusEl.textContent = 'Could not load release metadata. You can still try the direct download links.';
+          statusEl.className = 'fade-in mt-5 text-sm text-ink-400';
+        }
+      }
+
+      document.getElementById('btn-copy').addEventListener('click', async function () {
+        const text = document.getElementById('ps-line').textContent.trim();
+        try {
+          await navigator.clipboard.writeText(text);
+          this.textContent = 'Copied';
+          setTimeout(() => { this.textContent = 'Copy'; }, 1600);
+        } catch (_) {
+          this.textContent = 'Select & copy';
+        }
+      });
+
+      loadMeta();
+    })();
+  </script>
+</body>
+</html>

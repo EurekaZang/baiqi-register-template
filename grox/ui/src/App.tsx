@@ -67,6 +67,7 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [draftMode, setDraftMode] = useState(true)
   const [me, setMe] = useState<MeResponse | null>(null)
+  const meRequestIdRef = useRef(0)
 
   const refreshSessions = useCallback(async () => {
     const list = await listSessions()
@@ -75,15 +76,17 @@ export default function App() {
   }, [])
 
   const refreshMe = useCallback(async () => {
+    const requestId = ++meRequestIdRef.current
     if (!hasAccountSession()) {
       setMe(null)
       return null
     }
     try {
       const profile = await fetchMe()
-      setMe(profile)
+      if (requestId === meRequestIdRef.current) setMe(profile)
       return profile
     } catch (err) {
+      if (requestId !== meRequestIdRef.current) return null
       setMe(null)
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
         await logoutAccount()
@@ -116,6 +119,21 @@ export default function App() {
     if (!isCompact) setSidebarOpen(false)
   }, [isCompact])
 
+  useEffect(() => {
+    if (showLogin) return
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') void refreshMe()
+    }
+    window.addEventListener('focus', refreshIfVisible)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    const intervalId = window.setInterval(refreshIfVisible, 30_000)
+    return () => {
+      window.removeEventListener('focus', refreshIfVisible)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+      window.clearInterval(intervalId)
+    }
+  }, [showLogin, refreshMe])
+
   function handleLoggedIn() {
     ensureLocalToken()
     setShowLogin(false)
@@ -124,6 +142,7 @@ export default function App() {
   }
 
   function handleSignedOut() {
+    meRequestIdRef.current += 1
     setMe(null)
     setSessions([])
     setActiveId(null)
@@ -240,6 +259,7 @@ export default function App() {
         draftMode={draftMode || !activeId}
         onSessionCreated={handleSessionCreated}
         onSessionUpdated={handleSessionUpdated}
+        onUsageChanged={() => void refreshMe()}
         isCompact={isCompact}
         onOpenSidebar={() => setSidebarOpen(true)}
         sidebarOpen={isCompact ? sidebarOpen : false}

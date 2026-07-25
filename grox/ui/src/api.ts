@@ -500,7 +500,11 @@ export async function fetchMe(
 ): Promise<MeResponse> {
   const token = (sessionToken ?? getSessionToken() ?? '').trim()
   if (!token) throw new ApiError(401, 'Not signed in')
-  return grokFetch<MeResponse>('/v1/me', { method: 'GET' }, { bearer: token })
+  return grokFetch<MeResponse>(
+    '/v1/me',
+    { method: 'GET', cache: 'no-store' },
+    { bearer: token },
+  )
 }
 
 export async function logoutAccount(): Promise<void> {

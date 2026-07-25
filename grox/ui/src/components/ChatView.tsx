@@ -185,6 +185,7 @@ type Props = {
   draftMode: boolean
   onSessionCreated: (session: SessionSummary) => void
   onSessionUpdated: (session: SessionSummary) => void
+  onUsageChanged?: () => void
   defaultModel?: string
   isCompact?: boolean
   onOpenSidebar?: () => void
@@ -196,6 +197,7 @@ export function ChatView({
   draftMode,
   onSessionCreated,
   onSessionUpdated,
+  onUsageChanged,
   defaultModel = 'grok-4.5',
   isCompact = false,
   onOpenSidebar,
@@ -865,6 +867,7 @@ export function ChatView({
       if (isViewingSession(activeId)) {
         setStreaming(null)
       }
+      onUsageChanged?.()
     }
   }
 

@@ -1,6 +1,6 @@
 {
   "name": "grox",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Grox — Windows desktop coding agent (Codex-style)",
   "main": "electron/dist/main.js",

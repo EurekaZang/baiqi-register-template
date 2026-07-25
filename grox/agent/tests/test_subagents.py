@@ -28,6 +28,10 @@ def test_build_options_enables_subagents_and_hooks():
     assert opts.include_hook_events is True
     assert opts.skills == "all"
     assert opts.setting_sources == ["user", "project", "local"]
+    assert opts.disallowed_tools == ["WebSearch"]
+    assert "grox_web" in opts.mcp_servers
+    assert opts.system_prompt["preset"] == "claude_code"
+    assert "mcp__grox_web__web_search" in opts.system_prompt["append"]
     assert opts.agents is not None
     assert "explore" in opts.agents
     assert "shell" in opts.agents

@@ -50,6 +50,7 @@ from .tasks import (
     parse_task_id_from_result,
     provisional_create_from_tool_start,
 )
+from .web_search import create_web_search_server
 
 router = APIRouter(dependencies=[Depends(require_token)])
 
@@ -1107,6 +1108,20 @@ def build_options(
         # Subagent lifecycle hooks → nested SSE cards in the chat UI.
         "include_hook_events": True,
         "agents": DEFAULT_SUBAGENTS,
+        # grokcli-2api cannot deserialize Claude's special built-in WebSearch
+        # schema (it has no OpenAI-style `parameters`). Replace it with an
+        # in-process MCP search tool that uses a regular JSON Schema.
+        "disallowed_tools": ["WebSearch"],
+        "mcp_servers": {"grox_web": create_web_search_server()},
+        "system_prompt": {
+            "type": "preset",
+            "preset": "claude_code",
+            "append": (
+                "The built-in WebSearch tool is unavailable. For web searches, "
+                "always use mcp__grox_web__web_search. WebFetch remains available "
+                "for opening a known URL."
+            ),
+        },
         # The SDK requires the dedicated skills option; permission bypass alone
         # exposes the Skill tool but does not load/discover its skill registry.
         "skills": configured_skills(),

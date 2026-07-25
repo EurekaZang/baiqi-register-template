@@ -16,7 +16,7 @@ win:
     - target: nsis
       arch: [x64]
   artifactName: Grox-Setup-${version}.${ext}
-  icon: resources/icon.png
+  icon: resources/icon.ico
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

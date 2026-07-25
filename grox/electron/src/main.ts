@@ -7,6 +7,7 @@ import { loadConfig, resolvedBaseUrl } from './config-store'
 import { startSidecar, stopSidecar, type SidecarHandle } from './sidecar'
 
 const PREFERRED_PORT = 17890
+const WINDOWS_APP_ID = 'app.grox.desktop'
 
 let mainWindow: BrowserWindow | null = null
 let sidecar: SidecarHandle | null = null
@@ -19,6 +20,12 @@ let quitting = false
 function projectRoot(): string {
   // dist/main.js → electron/ → grox/
   return path.resolve(__dirname, '..', '..')
+}
+
+function windowIconPath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.join(projectRoot(), 'resources', 'icon.png')
 }
 
 function findFreePort(preferred: number): Promise<number> {
@@ -119,6 +126,7 @@ async function createWindow(): Promise<void> {
     minWidth: 900,
     minHeight: 600,
     title: 'Grox',
+    icon: windowIconPath(),
     frame: false,
     autoHideMenuBar: true,
     hasShadow: true,
@@ -195,6 +203,10 @@ async function boot(): Promise<void> {
 
   registerIpc()
   await createWindow()
+}
+
+if (process.platform === 'win32') {
+  app.setAppUserModelId(WINDOWS_APP_ID)
 }
 
 app.whenReady().then(() => {

@@ -1062,6 +1062,17 @@ def clear_sdk_session_id(session: dict[str, Any]) -> dict[str, Any]:
     return session
 
 
+def configured_skills() -> str | list[str]:
+    """Normalize GROX_CHAT_SKILLS into the Agent SDK skills option."""
+    raw = str(settings.chat_skills or "all").strip()
+    lowered = raw.lower()
+    if lowered == "all":
+        return "all"
+    if lowered in {"", "none", "off", "false", "disabled"}:
+        return []
+    return [name.strip() for name in raw.split(",") if name.strip()]
+
+
 def build_options(
     session: dict[str, Any],
     *,
@@ -1096,6 +1107,10 @@ def build_options(
         # Subagent lifecycle hooks → nested SSE cards in the chat UI.
         "include_hook_events": True,
         "agents": DEFAULT_SUBAGENTS,
+        # The SDK requires the dedicated skills option; permission bypass alone
+        # exposes the Skill tool but does not load/discover its skill registry.
+        "skills": configured_skills(),
+        "setting_sources": ["user", "project", "local"],
     }
     resume = session.get("sdk_session_id")
     # Only resume when the transcript exists under the current cwd. Otherwise the

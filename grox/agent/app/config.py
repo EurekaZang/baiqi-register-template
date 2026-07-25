@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     chat_token: str = "grox-local-token"
     chat_default_model: str = "grok-4.5"
     chat_permission_mode: str = "bypassPermissions"
+    # Enable every skill discovered from the user's and project's Claude Code
+    # configuration. Set GROX_CHAT_SKILLS=off to suppress Skill entirely, or
+    # provide a comma-separated allowlist for a restricted deployment.
+    chat_skills: str = "all"
     chat_root_path: str = ""  # desktop: no /chat prefix
     # LLM gateway (public grokcli-2api or local router)
     anthropic_base_url: str = "https://kaggleyes.top/grokapi"

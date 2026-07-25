@@ -13,6 +13,7 @@ from claude_agent_sdk import (
 )
 
 from app.agent_bridge import TurnAccumulator, build_options, map_sdk_message
+from app.config import settings
 
 
 def test_build_options_enables_subagents_and_hooks():
@@ -25,11 +26,23 @@ def test_build_options_enables_subagents_and_hooks():
     )
     assert opts.include_partial_messages is True
     assert opts.include_hook_events is True
+    assert opts.skills == "all"
+    assert opts.setting_sources == ["user", "project", "local"]
     assert opts.agents is not None
     assert "explore" in opts.agents
     assert "shell" in opts.agents
     assert "review" in opts.agents
     assert "general" in opts.agents
+
+
+def test_build_options_supports_skill_allowlist_and_disable(monkeypatch):
+    session = {"cwd": "/tmp", "model": "grok-4.5", "sdk_session_id": None}
+
+    monkeypatch.setattr(settings, "chat_skills", "review, frontend-design")
+    assert build_options(session).skills == ["review", "frontend-design"]
+
+    monkeypatch.setattr(settings, "chat_skills", "off")
+    assert build_options(session).skills == []
 
 
 def test_subagent_start_and_done_hooks():

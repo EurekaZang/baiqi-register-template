@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from .auth import require_token
-from .config import settings
+from .config import STABLE_MODEL, settings
 
 router = APIRouter(dependencies=[Depends(require_token)])
 
@@ -29,7 +29,14 @@ def _ensure_sessions_dir() -> Path:
 
 
 def _session_path(session_id: str) -> Path:
-    return _ensure_sessions_dir() / f"{session_id}.json"
+    try:
+        canonical = str(uuid.UUID(str(session_id)))
+    except (ValueError, TypeError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        ) from None
+    return _ensure_sessions_dir() / f"{canonical}.json"
 
 
 def _recent_path() -> Path:
@@ -43,11 +50,14 @@ def _read_json(path: Path) -> Any:
 
 def _write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=False, indent=2)
-        fh.write("\n")
-    tmp.replace(path)
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with tmp.open("w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def normalize_cwd_input(cwd: str) -> str:
@@ -60,8 +70,12 @@ def normalize_cwd_input(cwd: str) -> str:
         text = str(Path(text).expanduser())
     # Collapse accidental whitespace around separators
     text = text.replace("\\", "/")
-    while "//" in text:
-        text = text.replace("//", "/")
+    # Preserve the leading double slash of a Windows UNC path.
+    unc = text.startswith("//")
+    remainder = text[2:] if unc else text
+    while "//" in remainder:
+        remainder = remainder.replace("//", "/")
+    text = f"//{remainder}" if unc else remainder
     # Keep POSIX root "/" and Windows drive roots such as "D:/" intact.
     # Stripping the slash from "D:/" produces drive-relative "D:", which
     # pathlib correctly rejects as non-absolute on Windows.
@@ -172,11 +186,19 @@ def get_session(session_id: str) -> dict[str, Any]:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to read session",
         ) from exc
-    if not isinstance(data, dict) or data.get("id") != session_id:
+    canonical_id = path.stem
+    if not isinstance(data, dict) or data.get("id") != canonical_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Corrupt session file",
         )
+    if data.get("model") != STABLE_MODEL:
+        data["model"] = STABLE_MODEL
+        data["sdk_session_id"] = None
+        try:
+            save_session(data)
+        except OSError:
+            pass
     return data
 
 
@@ -191,6 +213,13 @@ def list_sessions() -> list[dict[str, Any]]:
         except (OSError, json.JSONDecodeError):
             continue
         if isinstance(data, dict) and "id" in data:
+            if data.get("model") != STABLE_MODEL:
+                data["model"] = STABLE_MODEL
+                data["sdk_session_id"] = None
+                try:
+                    save_session(data)
+                except (OSError, HTTPException):
+                    pass
             sessions.append(data)
     sessions.sort(key=lambda s: s.get("updated_at") or s.get("created_at") or "", reverse=True)
     return sessions
@@ -198,12 +227,18 @@ def list_sessions() -> list[dict[str, Any]]:
 
 def create_session(*, cwd: str, title: str | None = None, model: str | None = None) -> dict[str, Any]:
     resolved = validate_cwd(cwd)
+    requested_model = (model or STABLE_MODEL).strip()
+    if requested_model != STABLE_MODEL:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported model; Grox v1.0 only supports {STABLE_MODEL}",
+        )
     now = _now_iso()
     session = {
         "id": str(uuid.uuid4()),
         "title": title or "New chat",
         "cwd": str(resolved),
-        "model": model or settings.chat_default_model,
+        "model": STABLE_MODEL,
         "sdk_session_id": None,
         "created_at": now,
         "updated_at": now,
@@ -219,12 +254,13 @@ def create_session(*, cwd: str, title: str | None = None, model: str | None = No
 
 
 def delete_session(session_id: str) -> None:
-    path = _session_path(session_id)
-    if not path.is_file():
+    session = get_session(session_id)
+    if session.get("status") == "running":
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a running session; stop it first",
         )
+    path = _session_path(session_id)
     try:
         path.unlink()
     except OSError as exc:
@@ -255,20 +291,22 @@ def update_session(
         changed = True
     if cwd is not None:
         resolved = validate_cwd(cwd)
-        session["cwd"] = str(resolved)
+        next_cwd = str(resolved)
+        if next_cwd != session.get("cwd"):
+            session["sdk_session_id"] = None
+        session["cwd"] = next_cwd
         touch_recent_cwd(session["cwd"])
         changed = True
     if model is not None:
-        next_model = (model or "").strip() or settings.chat_default_model
-        prev_model = session.get("model") or settings.chat_default_model
-        if next_model != prev_model:
-            session["model"] = next_model
-            # Drop resume handle so the next turn starts a fresh SDK session
-            # under the newly selected model (resume would pin the old model).
+        next_model = (model or "").strip() or STABLE_MODEL
+        if next_model != STABLE_MODEL:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported model; Grox v1.0 only supports {STABLE_MODEL}",
+            )
+        if session.get("model") != STABLE_MODEL:
+            session["model"] = STABLE_MODEL
             session["sdk_session_id"] = None
-            changed = True
-        elif session.get("model") != next_model:
-            session["model"] = next_model
             changed = True
     if pinned is not None:
         session["pinned"] = bool(pinned)

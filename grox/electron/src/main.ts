@@ -137,7 +137,7 @@ async function createWindow(): Promise<void> {
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       additionalArguments: [
         `--grox-api-base=${exposedApiBase}`,
         `--grox-token=${localToken}`,
@@ -209,22 +209,35 @@ if (process.platform === 'win32') {
   app.setAppUserModelId(WINDOWS_APP_ID)
 }
 
-app.whenReady().then(() => {
-  boot().catch((err) => {
-    console.error('[grox] boot failed', err)
-    dialog.showErrorBox(
-      'Grox failed to start',
-      err instanceof Error ? err.message : String(err),
-    )
-    app.quit()
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+
+if (!hasSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
   })
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow().catch((err) => console.error(err))
-    }
+  app.whenReady().then(() => {
+    boot().catch((err) => {
+      console.error('[grox] boot failed', err)
+      dialog.showErrorBox(
+        'Grox failed to start',
+        err instanceof Error ? err.message : String(err),
+      )
+      app.quit()
+    })
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow().catch((err) => console.error(err))
+      }
+    })
   })
-})
+}
 
 app.on('before-quit', () => {
   quitting = true

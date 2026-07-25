@@ -9,12 +9,12 @@ export function useVisualViewportLock(
   enabled: boolean,
 ): void {
   useEffect(() => {
+    const element = elRef.current
     if (!enabled) {
-      const el = elRef.current
-      if (el) {
-        el.style.height = ''
-        el.style.top = ''
-        el.style.position = ''
+      if (element) {
+        element.style.height = ''
+        element.style.top = ''
+        element.style.position = ''
       }
       return
     }
@@ -23,15 +23,14 @@ export function useVisualViewportLock(
     if (!vv) return
 
     const apply = () => {
-      const el = elRef.current
-      if (!el) return
+      if (!element) return
       const height = vv.height
       const offsetTop = vv.offsetTop
-      el.style.position = 'fixed'
-      el.style.left = '0'
-      el.style.right = '0'
-      el.style.top = `${offsetTop}px`
-      el.style.height = `${height}px`
+      element.style.position = 'fixed'
+      element.style.left = '0'
+      element.style.right = '0'
+      element.style.top = `${offsetTop}px`
+      element.style.height = `${height}px`
     }
 
     apply()
@@ -42,13 +41,12 @@ export function useVisualViewportLock(
       vv.removeEventListener('resize', apply)
       vv.removeEventListener('scroll', apply)
       window.removeEventListener('orientationchange', apply)
-      const el = elRef.current
-      if (el) {
-        el.style.height = ''
-        el.style.top = ''
-        el.style.left = ''
-        el.style.right = ''
-        el.style.position = ''
+      if (element) {
+        element.style.height = ''
+        element.style.top = ''
+        element.style.left = ''
+        element.style.right = ''
+        element.style.position = ''
       }
     }
   }, [elRef, enabled])

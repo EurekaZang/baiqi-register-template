@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  ApiError,
   fetchMe,
   getToken,
   hasAccountSession,
   listSessions,
   deleteSession,
+  logoutAccount,
   patchSession,
   setToken,
   type MeResponse,
@@ -21,6 +23,14 @@ import './App.css'
 import './styles/grox-theme.css'
 
 const LOCAL_TOKEN = 'grox-local-token'
+
+function sortSessions(items: SessionSummary[]): SessionSummary[] {
+  return [...items].sort((a, b) => {
+    const pinOrder = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))
+    if (pinOrder !== 0) return pinOrder
+    return (b.updated_at || '').localeCompare(a.updated_at || '')
+  })
+}
 
 /** Desktop / dev: always use local loopback token for agent API. */
 function ensureLocalToken(): void {
@@ -73,8 +83,15 @@ export default function App() {
       const profile = await fetchMe()
       setMe(profile)
       return profile
-    } catch {
+    } catch (err) {
       setMe(null)
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        await logoutAccount()
+        setSessions([])
+        setActiveId(null)
+        setDraftMode(true)
+        setShowLogin(true)
+      }
       return null
     }
   }, [])
@@ -154,12 +171,7 @@ export default function App() {
       const updated = await patchSession(id, { pinned })
       setSessions((prev) => {
         const next = prev.map((s) => (s.id === id ? { ...s, ...updated } : s))
-        return next.sort((a, b) => {
-          const ap = a.pinned ? 0 : 1
-          const bp = b.pinned ? 0 : 1
-          if (ap !== bp) return ap - bp
-          return (b.updated_at || '').localeCompare(a.updated_at || '')
-        })
+        return sortSessions(next)
       })
     } catch {
       /* ignore pin failure */
@@ -175,12 +187,10 @@ export default function App() {
   function handleSessionUpdated(session: SessionSummary) {
     setSessions((prev) => {
       const idx = prev.findIndex((s) => s.id === session.id)
-      if (idx < 0) return [session, ...prev]
+      if (idx < 0) return sortSessions([session, ...prev])
       const next = [...prev]
       next[idx] = { ...next[idx], ...session }
-      return next.sort((a, b) =>
-        (b.updated_at || '').localeCompare(a.updated_at || ''),
-      )
+      return sortSessions(next)
     })
   }
 

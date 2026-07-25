@@ -39,7 +39,7 @@ from .attachments import (
     save_upload_under_cwd,
 )
 from .auth import require_token
-from .config import settings
+from .config import STABLE_MODEL, settings
 from .sessions import get_session, save_session
 from .sse import format_sse
 from .tasks import (
@@ -1188,7 +1188,7 @@ def build_options(
 
     kwargs: dict[str, Any] = {
         "cwd": session.get("cwd"),
-        "model": session.get("model") or settings.chat_default_model,
+        "model": STABLE_MODEL,
         "permission_mode": settings.chat_permission_mode or "bypassPermissions",
         "env": env,
         # Emit token-level StreamEvent partials so the UI can type out text

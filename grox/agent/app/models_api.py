@@ -4,10 +4,10 @@ import time
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response
 
 from .auth import require_token
-from .config import settings
+from .config import STABLE_MODEL, settings
 
 router = APIRouter(dependencies=[Depends(require_token)])
 
@@ -42,22 +42,24 @@ def normalize_models_response(raw: Any, *, stale: bool = False) -> dict[str, Any
     else:
         items = []
 
-    normalized: list[dict[str, str]] = []
+    display_name = STABLE_MODEL
     for item in items:
         if not isinstance(item, dict):
             continue
         model_id = item.get("id")
         if not model_id or not isinstance(model_id, str):
             continue
+        if model_id != STABLE_MODEL:
+            continue
         display = item.get("display_name")
-        if not display or not isinstance(display, str):
-            display = model_id
-        normalized.append({"id": model_id, "display_name": display})
+        if display and isinstance(display, str):
+            display_name = display
+        break
 
     return {
         "object": "list",
-        "data": normalized,
-        "default": settings.chat_default_model,
+        "data": [{"id": STABLE_MODEL, "display_name": display_name}],
+        "default": STABLE_MODEL,
         "stale": stale,
     }
 
@@ -70,7 +72,7 @@ async def fetch_models_from_router() -> dict[str, Any]:
     if key:
         headers["Authorization"] = f"Bearer {key}"
         headers["x-api-key"] = key
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
         response = await client.get(url, headers=headers or None)
         response.raise_for_status()
         return response.json()
@@ -98,10 +100,12 @@ async def get_models_payload() -> tuple[dict[str, Any], bool]:
         if _cache_payload is not None:
             stale_payload = {**_cache_payload, "stale": True}
             return stale_payload, True
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Model list unavailable from model router",
-        ) from None
+        # The stable release intentionally has one supported model. Keep the
+        # selector usable when the optional discovery endpoint is unavailable.
+        payload = normalize_models_response({}, stale=True)
+        _cache_payload = payload
+        _cache_fetched_at = time.monotonic()
+        return payload, True
 
 
 @router.get("/api/models")

@@ -471,9 +471,18 @@ export async function loginAccount(
 
   // Wire session into local agent so Claude SDK / models use Bearer session.
   try {
-    await putRuntimeConfig({ base_url: url, api_key: body.session_token })
-  } catch {
-    // Agent may be offline during pure UI work; session still stored for /v1/me.
+    await putRuntimeConfig({
+      base_url: url,
+      api_key: body.session_token,
+      default_model: 'grok-4.5',
+    })
+  } catch (err) {
+    // A desktop login is not usable unless the local agent receives the same
+    // account session. Browser-only UI development has no preload bridge.
+    if (getGroxBridge()) {
+      clearSessionToken()
+      throw err
+    }
   }
 
   // Drop legacy key onboarding markers; account session is the gate now.

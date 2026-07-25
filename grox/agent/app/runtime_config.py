@@ -6,14 +6,16 @@ Never log the raw API key.
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from urllib.parse import urlparse
 
 from .auth import require_token
-from .config import settings
+from .config import STABLE_MODEL, settings
 
 router = APIRouter(dependencies=[Depends(require_token)])
 
@@ -42,20 +44,44 @@ def load() -> dict[str, Any]:
 
 
 def apply_and_save(patch: dict[str, Any]) -> dict[str, Any]:
+    if "default_model" in patch and patch["default_model"]:
+        requested_model = str(patch["default_model"]).strip()
+        if requested_model != STABLE_MODEL:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported model; Grox v1.0 only supports {STABLE_MODEL}",
+            )
     data = load()
     base_url_changed = False
     if "base_url" in patch and patch["base_url"]:
-        data["base_url"] = str(patch["base_url"]).rstrip("/")
+        candidate = str(patch["base_url"]).strip().rstrip("/")
+        parsed = urlparse(candidate)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="base_url must be an absolute http(s) URL",
+            )
+        if parsed.username or parsed.password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="base_url must not contain credentials",
+            )
+        data["base_url"] = candidate
         settings.anthropic_base_url = data["base_url"]
         settings.chat_model_router_url = data["base_url"]
         base_url_changed = True
     if "api_key" in patch and patch["api_key"] is not None:
         data["api_key"] = str(patch["api_key"])
         settings.anthropic_api_key = data["api_key"]
-    if "default_model" in patch and patch["default_model"]:
-        data["default_model"] = str(patch["default_model"])
-        settings.chat_default_model = data["default_model"]
-    _path().write_text(json.dumps(data, indent=2), encoding="utf-8")
+    data["default_model"] = STABLE_MODEL
+    settings.chat_default_model = STABLE_MODEL
+    path = _path()
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
     if base_url_changed:
         try:
             from .models_api import clear_models_cache
@@ -72,7 +98,7 @@ def public_view() -> dict[str, Any]:
     return {
         "base_url": data.get("base_url") or settings.anthropic_base_url,
         "api_key_set": bool(key),
-        "default_model": data.get("default_model") or settings.chat_default_model,
+        "default_model": STABLE_MODEL,
     }
 
 
@@ -83,8 +109,7 @@ def bootstrap_from_disk() -> None:
         settings.chat_model_router_url = data["base_url"]
     if data.get("api_key"):
         settings.anthropic_api_key = data["api_key"]
-    if data.get("default_model"):
-        settings.chat_default_model = data["default_model"]
+    settings.chat_default_model = STABLE_MODEL
 
 
 @router.get("/api/runtime-config")

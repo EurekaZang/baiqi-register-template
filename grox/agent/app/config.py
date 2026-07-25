@@ -2,6 +2,7 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AGENT_ROOT = Path(__file__).resolve().parents[1]
+STABLE_MODEL = "grok-4.5"
 
 
 def default_data_dir() -> Path:
@@ -15,7 +16,7 @@ class Settings(BaseSettings):
     chat_host: str = "127.0.0.1"
     chat_port: int = 17890
     chat_token: str = "grox-local-token"
-    chat_default_model: str = "grok-4.5"
+    chat_default_model: str = STABLE_MODEL
     chat_permission_mode: str = "bypassPermissions"
     # Enable every skill discovered from the user's and project's Claude Code
     # configuration. Set GROX_CHAT_SKILLS=off to suppress Skill entirely, or

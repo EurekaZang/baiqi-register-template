@@ -165,6 +165,21 @@ function mergePartialAssistant(
   ]
 }
 
+function mergeOptimisticUser(
+  messages: Message[],
+  optimistic?: Message | null,
+): Message[] {
+  if (!optimistic) return messages
+  const alreadyPersisted = messages.some(
+    (message) =>
+      message.role === 'user' &&
+      message.content === optimistic.content &&
+      JSON.stringify(message.attachments || []) ===
+        JSON.stringify(optimistic.attachments || []),
+  )
+  return alreadyPersisted ? messages : [...messages, optimistic]
+}
+
 type Props = {
   sessionId: string | null
   draftMode: boolean
@@ -477,12 +492,15 @@ export function ChatView({
     // One live stream at a time in this SPA instance. Switching chats does not
     // cancel background work, but starting a new send on another session does.
     if (abortRef.current && streamSessionIdRef.current && streamSessionIdRef.current !== activeId) {
+      const previousId = streamSessionIdRef.current
       abortRef.current.abort()
       abortRef.current = null
       streamSessionIdRef.current = null
       setStreaming(null)
+      await stopSession(previousId).catch(() => undefined)
     }
 
+    let optimisticUser: Message | null = null
     try {
       if (draftMode || !activeId) {
         activeId = await ensureSessionForUpload()
@@ -501,6 +519,7 @@ export function ChatView({
         attachments: attachments.length ? attachments : undefined,
         created_at: new Date().toISOString(),
       }
+      optimisticUser = userMsg
       if (isViewingSession(streamId)) {
         setMessages((prev) => [...prev, userMsg])
         setStreaming({ text: '', tools: [], active: true })
@@ -809,7 +828,12 @@ export function ChatView({
           if (isViewingSession(activeId)) {
             setSession(fresh)
             // Network/stream failure must not erase already-rendered tokens.
-            setMessages(mergePartialAssistant(fresh.messages || [], streamBuf))
+            setMessages(
+              mergePartialAssistant(
+                mergeOptimisticUser(fresh.messages || [], optimisticUser),
+                streamBuf,
+              ),
+            )
             setTasks(
               Array.isArray(fresh.tasks)
                 ? fresh.tasks
@@ -820,7 +844,12 @@ export function ChatView({
         } catch {
           // Session refresh failed (also network): still pin partial UI.
           if (isViewingSession(activeId) && streamBuf) {
-            setMessages((prev) => mergePartialAssistant(prev, streamBuf))
+            setMessages((prev) =>
+              mergePartialAssistant(
+                mergeOptimisticUser(prev, optimisticUser),
+                streamBuf,
+              ),
+            )
             if (streamBuf.tasks) setTasks(streamBuf.tasks)
           }
         }
@@ -856,11 +885,16 @@ export function ChatView({
     } catch {
       /* ignore */
     }
-    // Refresh status if still viewing.
-    if (isViewingSession(id)) {
-      try {
-        const fresh = await getSession(id)
-        setSession(fresh)
+      // The interrupt endpoint can return before the SDK finalizer persists
+      // idle. Poll briefly so the composer does not remain disabled.
+      if (isViewingSession(id)) {
+        try {
+          let fresh = await getSession(id)
+          for (let attempt = 0; fresh.status === 'running' && attempt < 12; attempt += 1) {
+            await new Promise((resolve) => window.setTimeout(resolve, 150))
+            fresh = await getSession(id)
+          }
+          setSession(fresh)
         setMessages(fresh.messages || [])
         setTasks(Array.isArray(fresh.tasks) ? fresh.tasks : [])
         setContextUsage(fresh.context_usage || null)

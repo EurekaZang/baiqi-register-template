@@ -46,9 +46,10 @@ class _FakeAsyncClient:
     next_response: _FakeResponse | Exception | None = None
     calls: list[str] = []
     last_headers: dict[str, str] | None = None
+    last_kwargs: dict[str, Any] | None = None
 
     def __init__(self, *args, **kwargs):
-        pass
+        type(self).last_kwargs = dict(kwargs)
 
     async def __aenter__(self):
         return self
@@ -76,12 +77,14 @@ def _reset_fake_client():
     _FakeAsyncClient.next_response = None
     _FakeAsyncClient.calls = []
     _FakeAsyncClient.last_headers = None
+    _FakeAsyncClient.last_kwargs = None
     models_api.clear_models_cache()
     yield
     models_api.clear_models_cache()
     _FakeAsyncClient.next_response = None
     _FakeAsyncClient.calls = []
     _FakeAsyncClient.last_headers = None
+    _FakeAsyncClient.last_kwargs = None
 
 
 def test_models_requires_auth(monkeypatch):
@@ -102,6 +105,8 @@ def test_models_sends_bearer_when_api_key_set(monkeypatch):
     assert _FakeAsyncClient.last_headers is not None
     assert _FakeAsyncClient.last_headers.get("Authorization") == "Bearer sk-test-key"
     assert _FakeAsyncClient.last_headers.get("x-api-key") == "sk-test-key"
+    assert _FakeAsyncClient.last_kwargs is not None
+    assert _FakeAsyncClient.last_kwargs.get("trust_env") is False
 
 
 def test_models_omits_auth_headers_without_api_key(monkeypatch):
@@ -139,14 +144,7 @@ def test_models_normalizes_and_sets_default(monkeypatch):
     assert body["object"] == "list"
     assert body["default"] == "grok-4.5"
     assert body.get("stale") is False
-    ids = [m["id"] for m in body["data"]]
-    assert ids == ["claude-sonnet-5", "grok-4.5", "no-display"]
-    claude = next(m for m in body["data"] if m["id"] == "claude-sonnet-5")
-    assert claude["display_name"] == "Claude Sonnet 5"
-    grok = next(m for m in body["data"] if m["id"] == "grok-4.5")
-    assert grok["display_name"] == "grok-4.5"
-    no_display = next(m for m in body["data"] if m["id"] == "no-display")
-    assert no_display["display_name"] == "no-display"
+    assert body["data"] == [{"id": "grok-4.5", "display_name": "grok-4.5"}]
     assert _FakeAsyncClient.calls == ["http://router.test/v1/models"]
 
 
@@ -154,7 +152,7 @@ def test_models_uses_cache_within_ttl(monkeypatch):
     c = _client(monkeypatch)
     monkeypatch.setattr(models_api.httpx, "AsyncClient", _FakeAsyncClient)
     _FakeAsyncClient.next_response = _FakeResponse(
-        {"data": [{"id": "m1", "display_name": "Model 1"}]}
+        {"data": [{"id": "grok-4.5", "display_name": "Grok 4.5"}]}
     )
 
     r1 = c.get("/api/models", headers=_auth_headers())
@@ -162,11 +160,11 @@ def test_models_uses_cache_within_ttl(monkeypatch):
     assert len(_FakeAsyncClient.calls) == 1
 
     _FakeAsyncClient.next_response = _FakeResponse(
-        {"data": [{"id": "m2", "display_name": "Model 2"}]}
+        {"data": [{"id": "other", "display_name": "Other"}]}
     )
     r2 = c.get("/api/models", headers=_auth_headers())
     assert r2.status_code == 200
-    assert r2.json()["data"][0]["id"] == "m1"
+    assert r2.json()["data"][0]["id"] == "grok-4.5"
     assert len(_FakeAsyncClient.calls) == 1  # still cached
 
 
@@ -175,20 +173,20 @@ def test_models_refetches_after_ttl(monkeypatch):
     monkeypatch.setattr(settings, "models_cache_ttl_sec", 0.05)
     monkeypatch.setattr(models_api.httpx, "AsyncClient", _FakeAsyncClient)
     _FakeAsyncClient.next_response = _FakeResponse(
-        {"data": [{"id": "m1", "display_name": "Model 1"}]}
+        {"data": [{"id": "grok-4.5", "display_name": "Grok 4.5"}]}
     )
 
     r1 = c.get("/api/models", headers=_auth_headers())
     assert r1.status_code == 200
-    assert r1.json()["data"][0]["id"] == "m1"
+    assert r1.json()["data"][0]["id"] == "grok-4.5"
 
     time.sleep(0.06)
     _FakeAsyncClient.next_response = _FakeResponse(
-        {"data": [{"id": "m2", "display_name": "Model 2"}]}
+        {"data": [{"id": "grok-4.5", "display_name": "Grok Stable"}]}
     )
     r2 = c.get("/api/models", headers=_auth_headers())
     assert r2.status_code == 200
-    assert r2.json()["data"][0]["id"] == "m2"
+    assert r2.json()["data"][0]["id"] == "grok-4.5"
     assert len(_FakeAsyncClient.calls) == 2
 
 
@@ -196,7 +194,7 @@ def test_models_returns_stale_cache_on_upstream_failure(monkeypatch):
     c = _client(monkeypatch)
     monkeypatch.setattr(models_api.httpx, "AsyncClient", _FakeAsyncClient)
     _FakeAsyncClient.next_response = _FakeResponse(
-        {"data": [{"id": "cached", "display_name": "Cached"}]}
+        {"data": [{"id": "grok-4.5", "display_name": "Grok 4.5"}]}
     )
     r1 = c.get("/api/models", headers=_auth_headers())
     assert r1.status_code == 200
@@ -208,26 +206,28 @@ def test_models_returns_stale_cache_on_upstream_failure(monkeypatch):
     r2 = c.get("/api/models", headers=_auth_headers())
     assert r2.status_code == 200
     body = r2.json()
-    assert body["data"][0]["id"] == "cached"
+    assert body["data"][0]["id"] == "grok-4.5"
     assert body["stale"] is True
     assert body["default"] == "grok-4.5"
     assert r2.headers.get("x-models-stale") == "true"
 
 
-def test_models_503_when_no_cache_and_upstream_fails(monkeypatch):
+def test_models_returns_fixed_fallback_when_no_cache_and_upstream_fails(monkeypatch):
     c = _client(monkeypatch)
     monkeypatch.setattr(models_api.httpx, "AsyncClient", _FakeAsyncClient)
     _FakeAsyncClient.next_response = httpx.ConnectError("down")
 
     r = c.get("/api/models", headers=_auth_headers())
-    assert r.status_code == 503
-    assert "model" in r.json()["detail"].lower() or "unavailable" in r.json()["detail"].lower()
+    assert r.status_code == 200
+    assert r.json()["data"] == [{"id": "grok-4.5", "display_name": "grok-4.5"}]
+    assert r.json()["stale"] is True
 
 
-def test_models_503_on_http_error_without_cache(monkeypatch):
+def test_models_fixed_fallback_on_http_error_without_cache(monkeypatch):
     c = _client(monkeypatch)
     monkeypatch.setattr(models_api.httpx, "AsyncClient", _FakeAsyncClient)
     _FakeAsyncClient.next_response = _FakeResponse({"error": "nope"}, status_code=502)
 
     r = c.get("/api/models", headers=_auth_headers())
-    assert r.status_code == 503
+    assert r.status_code == 200
+    assert r.json()["data"][0]["id"] == "grok-4.5"

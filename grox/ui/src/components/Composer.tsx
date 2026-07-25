@@ -185,6 +185,10 @@ export function Composer({
     const path = raw.trim().replace(/^@/, '')
     if (!path) return
     setPathError(null)
+    if (attachments.length >= 12) {
+      setPathError('A message can include at most 12 attachments.')
+      return
+    }
     if (attachments.some((a) => a.path === path || a.path.endsWith(`/${path}`))) {
       setPathDraft('')
       return
@@ -241,9 +245,21 @@ export function Composer({
     }
     setUploadBusy(true)
     setPathError(null)
-    const errors: string[] = []
-    try {
-      for (const file of files.slice(0, 12)) {
+      const errors: string[] = []
+      const available = Math.max(0, 12 - attachments.length)
+      if (available === 0) {
+        setUploadBusy(false)
+        setPathError('A message can include at most 12 attachments.')
+        if (fileRef.current) fileRef.current.value = ''
+        return
+      }
+      if (files.length > available) {
+        errors.push(
+          `${files.length - available} file(s) skipped: maximum 12 attachments`,
+        )
+      }
+      try {
+        for (const file of files.slice(0, available)) {
         try {
           const item = await uploadFile(file)
           pushAttachment(item)

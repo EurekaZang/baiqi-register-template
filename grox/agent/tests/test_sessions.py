@@ -24,6 +24,7 @@ def test_normalize_cwd_preserves_windows_drive_root():
     assert normalize_cwd_input("D:/") == "D:/"
     assert normalize_cwd_input("d:\\") == "d:/"
     assert normalize_cwd_input("D:/project/") == "D:/project"
+    assert normalize_cwd_input(r"\\server\\share\\folder\\") == "//server/share/folder"
 
 
 def test_create_requires_absolute_existing_cwd(monkeypatch, tmp_path):
@@ -263,7 +264,7 @@ def test_patch_rejects_cwd_and_model_while_running(monkeypatch, tmp_path):
     assert r_title.json()["title"] == "Still ok"
 
 
-def test_patch_model_when_idle_clears_sdk_session(monkeypatch, tmp_path):
+def test_patch_rejects_unsupported_model(monkeypatch, tmp_path):
     c = _client(monkeypatch, tmp_path)
     cwd = tmp_path / "proj"
     cwd.mkdir()
@@ -288,22 +289,70 @@ def test_patch_model_when_idle_clears_sdk_session(monkeypatch, tmp_path):
         headers=_auth_headers(),
         json={"model": "other-model"},
     )
-    assert patched.status_code == 200
-    body = patched.json()
-    assert body["model"] == "other-model"
-    assert body["sdk_session_id"] is None
+    assert patched.status_code == 400
+    assert "grok-4.5" in patched.json()["detail"]
 
-    # same model → keep resume id
-    session = sessions_mod.get_session(sid)
-    session["sdk_session_id"] = "sdk-same"
-    sessions_mod.save_session(session)
-    same = c.patch(
-        f"/api/sessions/{sid}",
+    created_other = c.post(
+        "/api/sessions",
         headers=_auth_headers(),
-        json={"model": "other-model"},
+        json={"cwd": str(cwd), "model": "other-model"},
     )
-    assert same.status_code == 200
-    assert same.json()["sdk_session_id"] == "sdk-same"
+    assert created_other.status_code == 400
+
+
+def test_changing_cwd_clears_sdk_session(monkeypatch, tmp_path):
+    c = _client(monkeypatch, tmp_path)
+    cwd = tmp_path / "proj"
+    other = tmp_path / "other"
+    cwd.mkdir()
+    other.mkdir()
+    created = c.post(
+        "/api/sessions",
+        headers=_auth_headers(),
+        json={"cwd": str(cwd)},
+    ).json()
+
+    from app import sessions as sessions_mod
+
+    session = sessions_mod.get_session(created["id"])
+    session["sdk_session_id"] = "sdk-old-cwd"
+    sessions_mod.save_session(session)
+    patched = c.patch(
+        f"/api/sessions/{created['id']}",
+        headers=_auth_headers(),
+        json={"cwd": str(other)},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["sdk_session_id"] is None
+
+
+def test_invalid_session_id_cannot_escape_sessions_dir(monkeypatch, tmp_path):
+    c = _client(monkeypatch, tmp_path)
+    for bad_id in ("../runtime", r"..\runtime", "not-a-uuid"):
+        assert c.get(f"/api/sessions/{bad_id}", headers=_auth_headers()).status_code == 404
+
+
+def test_delete_rejects_running_session(monkeypatch, tmp_path):
+    c = _client(monkeypatch, tmp_path)
+    cwd = tmp_path / "proj"
+    cwd.mkdir()
+    created = c.post(
+        "/api/sessions",
+        headers=_auth_headers(),
+        json={"cwd": str(cwd)},
+    ).json()
+
+    from app import sessions as sessions_mod
+
+    session = sessions_mod.get_session(created["id"])
+    session["status"] = "running"
+    sessions_mod.save_session(session)
+    deleted = c.delete(
+        f"/api/sessions/{created['id']}",
+        headers=_auth_headers(),
+    )
+    assert deleted.status_code == 409
+    assert (settings.sessions_dir / f"{created['id']}.json").is_file()
 
 
 def test_sessions_routes_require_auth(monkeypatch, tmp_path):

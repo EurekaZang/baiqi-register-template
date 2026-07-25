@@ -92,11 +92,7 @@ def test_put_partial_keeps_existing(tmp_path, monkeypatch):
         headers=_auth_headers(),
         json={"default_model": "other-model"},
     )
-    assert r.status_code == 200
-    body = r.json()
-    assert body["base_url"] == "https://a.example"
-    assert body["api_key_set"] is True
-    assert body["default_model"] == "other-model"
+    assert r.status_code == 400
     assert settings.anthropic_api_key == "k1"
 
 
@@ -121,7 +117,33 @@ def test_bootstrap_from_disk(tmp_path, monkeypatch):
     assert settings.anthropic_base_url == "https://boot.example"
     assert settings.chat_model_router_url == "https://boot.example"
     assert settings.anthropic_api_key == "boot-key"
-    assert settings.chat_default_model == "boot-model"
+    assert settings.chat_default_model == "grok-4.5"
+
+
+def test_put_rejects_invalid_or_credentialed_base_url(tmp_path, monkeypatch):
+    c = _client(monkeypatch, tmp_path)
+    for url in ("not-a-url", "ftp://example.com", "https://user:pass@example.com"):
+        r = c.put(
+            "/api/runtime-config",
+            headers=_auth_headers(),
+            json={"base_url": url},
+        )
+        assert r.status_code == 400
+
+
+def test_invalid_model_does_not_partially_apply_base_url(tmp_path, monkeypatch):
+    c = _client(monkeypatch, tmp_path)
+    r = c.put(
+        "/api/runtime-config",
+        headers=_auth_headers(),
+        json={
+            "base_url": "https://should-not-apply.example",
+            "default_model": "other-model",
+        },
+    )
+    assert r.status_code == 400
+    assert settings.anthropic_base_url == "https://default.example"
+    assert not (tmp_path / "runtime.json").exists()
 
 
 def test_build_options_empty_api_key_clears_env(monkeypatch):

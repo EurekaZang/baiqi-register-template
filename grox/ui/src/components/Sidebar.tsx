@@ -141,6 +141,7 @@ export function Sidebar({
       <div className="sidebar-brand">
         <div className="sidebar-brand-row">
           <a href="/" className="brand-link" title="Grox home">
+            <img src="/logo-mark.svg" alt="" draggable={false} />
             <span className="brand-accent">Grox</span>
           </a>
           {variant === 'drawer' ? (

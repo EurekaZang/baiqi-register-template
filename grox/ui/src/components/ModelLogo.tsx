@@ -24,7 +24,7 @@ export function ModelLogo({ vendor, className, title }: Props) {
       )
     case 'anthropic':
       return (
-        <svg viewBox="0 0 24 24" className={cn(common, 'text-[#D97757]')} fill="currentColor" {...a11y}>
+        <svg viewBox="0 0 24 24" className={cn(common, 'text-white')} fill="currentColor" {...a11y}>
           <path d="M17.304 3h-3.671l6.696 18h3.671L17.304 3zM6.696 3 0 21h3.744l1.37-3.552h7.051L13.535 21h3.751L10.392 3H6.696zm-.518 11.346L8.97 7.145l2.79 7.201H6.178z" />
         </svg>
       )
@@ -36,7 +36,7 @@ export function ModelLogo({ vendor, className, title }: Props) {
       )
     case 'deepseek':
       return (
-        <svg viewBox="0 0 24 24" className={cn(common, 'text-[#4D6BFE]')} fill="currentColor" {...a11y}>
+        <svg viewBox="0 0 24 24" className={cn(common, 'text-neutral-300')} fill="currentColor" {...a11y}>
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3.5c1.93 0 3.5 1.57 3.5 3.5S13.93 12.5 12 12.5 8.5 10.93 8.5 9 10.07 5.5 12 5.5zM12 20c-2.7 0-5.08-1.35-6.56-3.41C6.2 14.7 9.9 14 12 14s5.8.7 6.56 2.59C17.08 18.65 14.7 20 12 20z" />
         </svg>
       )
@@ -45,7 +45,7 @@ export function ModelLogo({ vendor, className, title }: Props) {
         <span
           className={cn(
             common,
-            'inline-flex items-center justify-center rounded-full bg-slate-200 text-[9px] font-bold uppercase text-slate-600',
+            'inline-flex items-center justify-center rounded-full bg-neutral-800 text-[9px] font-bold uppercase text-neutral-300',
           )}
           {...a11y}
         >

@@ -103,8 +103,8 @@ export function buildPreviewHtml(artifact: Artifact): string {
 <head>
   <meta charset="utf-8" />
   <style>
-    body{margin:0;font-family:ui-sans-serif,system-ui,sans-serif;background:#f8fafc;color:#0f172a}
-    .banner{padding:10px 14px;background:#e0f2fe;border-bottom:1px solid #bae6fd;font-size:12px;color:#0369a1}
+    body{margin:0;font-family:ui-sans-serif,system-ui,sans-serif;background:#f5f5f5;color:#111}
+    .banner{padding:10px 14px;background:#e8e8e8;border-bottom:1px solid #c7c7c7;font-size:12px;color:#333}
     pre{margin:0;padding:16px;overflow:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre}
   </style>
 </head>
@@ -118,7 +118,7 @@ export function buildPreviewHtml(artifact: Artifact): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-  return `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#0f172a;color:#e2e8f0;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace}pre{margin:0;padding:16px;white-space:pre-wrap}</style></head><body><pre>${escaped}</pre></body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#111;color:#e8e8e8;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace}pre{margin:0;padding:16px;white-space:pre-wrap}</style></head><body><pre>${escaped}</pre></body></html>`
 }
 
 export function groupSessionsByDay<T extends { updated_at?: string; created_at?: string; pinned?: boolean }>(

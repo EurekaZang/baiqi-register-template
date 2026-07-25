@@ -248,7 +248,7 @@ export function SettingsModal({ open, onClose, onSignedOut, me: meProp }: Props)
           </label>
           <p className="settings-note muted">
             Normal mode uses account login — API keys are not configured in the
-            client. Theme is fixed to 8090 chat blue–white for this MVP.
+            client. Grox uses a fixed black-and-white desktop theme.
           </p>
           {error ? <div className="error-banner settings-error">{error}</div> : null}
           {saved ? (

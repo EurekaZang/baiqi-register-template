@@ -168,7 +168,7 @@ export function CwdPicker({
             autoComplete="off"
             className={cn(
               'cwd-input font-mono text-xs',
-              error ? 'border-red-300 focus-visible:border-red-400' : '',
+              error ? 'border-neutral-400 focus-visible:border-white' : '',
             )}
             title={error || draft || 'Working directory'}
           />

@@ -1,4 +1,4 @@
-/* Thin aliases over App.css 8090 chat blue–white tokens. Do not introduce dark zinc. */
+/* Thin aliases over the Grox black-and-white product system. */
 :root {
   --grox-bg: var(--bg);
   --grox-panel: var(--panel);

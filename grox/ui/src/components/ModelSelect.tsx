@@ -43,7 +43,7 @@ function ModelOptionRow({
         {displayLabel(model)}
       </span>
       {tag ? (
-        <span className="ml-auto shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+        <span className="ml-auto shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-[10px] text-neutral-400">
           {tag}
         </span>
       ) : null}
@@ -135,8 +135,8 @@ export function ModelSelect({ value, onChange, disabled, compact }: Props) {
         <SelectTrigger
           size="sm"
           className={cn(
-            'model-select-trigger h-8 min-w-[168px] max-w-[260px] gap-1.5 rounded-full border-slate-200 bg-white px-2.5 shadow-sm',
-            'text-xs font-medium text-slate-800',
+            'model-select-trigger h-8 min-w-[168px] max-w-[260px] gap-1.5 rounded-full border-neutral-700 bg-neutral-950 px-2.5 shadow-sm',
+            'text-xs font-medium text-neutral-100',
           )}
           aria-label="Model"
         >
@@ -145,7 +145,7 @@ export function ModelSelect({ value, onChange, disabled, compact }: Props) {
               <ModelLogo vendor={vendorOf(current.id)} />
               <span className="truncate">{displayLabel(current)}</span>
               {currentTag ? (
-                <span className="shrink-0 rounded bg-slate-100 px-1 py-px font-mono text-[10px] font-normal text-slate-500">
+                <span className="shrink-0 rounded bg-neutral-800 px-1 py-px font-mono text-[10px] font-normal text-neutral-400">
                   {currentTag}
                 </span>
               ) : null}
@@ -153,7 +153,7 @@ export function ModelSelect({ value, onChange, disabled, compact }: Props) {
           </SelectValue>
           {stale ? (
             <span
-              className="size-1.5 shrink-0 rounded-full bg-amber-500"
+              className="size-1.5 shrink-0 rounded-full bg-neutral-400"
               title="Stale model list"
               aria-hidden
             />

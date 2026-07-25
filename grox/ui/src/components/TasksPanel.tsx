@@ -116,7 +116,7 @@ export function TasksPanel({
 
   const listBody =
     total === 0 ? (
-      <p className="text-xs leading-relaxed text-slate-500">
+      <p className="text-xs leading-relaxed text-neutral-500">
         When the agent calls TaskCreate / TaskUpdate, tasks show here as a
         compact checklist without covering the chat.
       </p>
@@ -124,19 +124,19 @@ export function TasksPanel({
       <div className="tasks-sheet-body">
         <div className="space-y-2 pb-2">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold text-slate-800">Checklist</span>
+            <span className="text-sm font-semibold text-neutral-100">Checklist</span>
             <Badge variant="accent" className="text-[10px]">
               {completed}/{total}
             </Badge>
           </div>
-          <div className="tasks-progress h-1 overflow-hidden rounded-full bg-slate-100">
+          <div className="tasks-progress h-1 overflow-hidden rounded-full bg-neutral-800">
             <div
-              className="h-full rounded-full bg-sky-500 transition-all"
+              className="h-full rounded-full bg-white transition-all"
               style={{ width: `${pct}%` }}
             />
           </div>
           {focus ? (
-            <div className="rounded-md border border-sky-100 bg-sky-50/70 px-2 py-1.5 text-[11px] text-sky-800">
+            <div className="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-[11px] text-neutral-200">
               <span className="font-semibold">Now: </span>
               {focus.status === 'in_progress' && focus.activeForm
                 ? focus.activeForm
@@ -173,7 +173,7 @@ export function TasksPanel({
                     {task.description ? (
                       <p>{task.description}</p>
                     ) : (
-                      <p className="text-slate-400">No description</p>
+                      <p className="text-neutral-500">No description</p>
                     )}
                     <div className="task-meta-line">
                       #{task.id}
@@ -212,7 +212,7 @@ export function TasksPanel({
             type="button"
             variant="ghost"
             size="sm"
-            className="tasks-chip h-8 px-2.5 text-xs text-slate-500"
+            className="tasks-chip h-8 px-2.5 text-xs text-neutral-500"
             onClick={() => onOpenChange(!open)}
           >
             <ListTodo className="h-3.5 w-3.5" />
@@ -223,7 +223,7 @@ export function TasksPanel({
           <Card className="tasks-popover shadow-lg">
             <CardHeader className="flex-row items-center justify-between space-y-0 p-3">
               <CardTitle className="flex items-center gap-2 text-sm">
-                <ListTodo className="h-4 w-4 text-sky-600" />
+                <ListTodo className="h-4 w-4 text-white" />
                 Tasks
               </CardTitle>
               <Button
@@ -254,7 +254,7 @@ export function TasksPanel({
           onClick={() => onOpenChange(!open)}
           aria-expanded={open}
         >
-          <ListTodo className="h-3.5 w-3.5 text-sky-600" />
+          <ListTodo className="h-3.5 w-3.5 text-white" />
           <span className="font-medium">Tasks</span>
           <Badge variant="accent" className="h-5 px-1.5 text-[10px]">
             {completed}/{total}
@@ -270,7 +270,7 @@ export function TasksPanel({
           </span>
           <ChevronDown
             className={cn(
-              'h-3.5 w-3.5 text-slate-400 transition-transform',
+              'h-3.5 w-3.5 text-neutral-500 transition-transform',
               open ? 'rotate-180' : '',
             )}
           />
@@ -293,7 +293,7 @@ export function TasksPanel({
           <CardHeader className="space-y-2 p-3 pb-2">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2 text-sm">
-                <ListTodo className="h-4 w-4 text-sky-600" />
+                <ListTodo className="h-4 w-4 text-white" />
                 Checklist
               </CardTitle>
               <div className="flex items-center gap-1.5">
@@ -311,14 +311,14 @@ export function TasksPanel({
                 </Button>
               </div>
             </div>
-            <div className="tasks-progress h-1 overflow-hidden rounded-full bg-slate-100">
+            <div className="tasks-progress h-1 overflow-hidden rounded-full bg-neutral-800">
               <div
-                className="h-full rounded-full bg-sky-500 transition-all"
+                className="h-full rounded-full bg-white transition-all"
                 style={{ width: `${pct}%` }}
               />
             </div>
             {focus ? (
-              <div className="rounded-md border border-sky-100 bg-sky-50/70 px-2 py-1.5 text-[11px] text-sky-800">
+              <div className="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-[11px] text-neutral-200">
                 <span className="font-semibold">Now: </span>
                 {focus.status === 'in_progress' && focus.activeForm
                   ? focus.activeForm
@@ -360,7 +360,7 @@ export function TasksPanel({
                           {task.description ? (
                             <p>{task.description}</p>
                           ) : (
-                            <p className="text-slate-400">No description</p>
+                            <p className="text-neutral-500">No description</p>
                           )}
                           <div className="task-meta-line">
                             #{task.id}

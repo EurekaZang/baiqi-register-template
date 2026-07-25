@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { ArrowRight, ChevronDown, LockKeyhole } from 'lucide-react'
 import {
   ApiError,
   DEFAULT_GROK_BASE_URL,
@@ -55,67 +56,115 @@ export function Onboarding({ onComplete }: Props) {
 
   return (
     <div className="login-page">
-      <form className="login-card" onSubmit={(e) => void onSubmit(e)}>
-        <h1>
-          <span className="brand-accent">Grox</span>
-        </h1>
-        <p className="muted">
-          Sign in with your account. No API key setup needed for normal use.
-        </p>
-        <label className="field">
-          <span>Username</span>
-          <Input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="username"
-            disabled={busy}
-            autoComplete="username"
-            autoFocus
-            required
-          />
-        </label>
-        <label className="field">
-          <span>Password</span>
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            disabled={busy}
-            autoComplete="current-password"
-            required
-          />
-        </label>
-        <button
-          type="button"
-          className="login-advanced-toggle muted"
-          onClick={() => setShowAdvanced((v) => !v)}
-        >
-          {showAdvanced ? 'Hide server URL' : 'Advanced: server URL'}
-        </button>
-        {showAdvanced ? (
-          <label className="field">
-            <span>Base URL</span>
-            <Input
-              type="url"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder={DEFAULT_GROK_BASE_URL}
-              disabled={busy}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </label>
-        ) : null}
-        {error ? <div className="error-banner login-error">{error}</div> : null}
-        <Button
-          type="submit"
-          disabled={busy || !username.trim() || !password}
-          className="w-full"
-        >
-          {busy ? 'Signing in…' : 'Sign in'}
-        </Button>
+      <form className="login-shell" onSubmit={(e) => void onSubmit(e)}>
+        <section className="login-identity" aria-label="Grox">
+          <div className="login-brand">
+            <img src="/logo-mark.svg" alt="" draggable={false} />
+            <span>GROX</span>
+          </div>
+
+          <div className="login-statement">
+            <p className="login-eyebrow">DESKTOP CODING AGENT</p>
+            <h1>
+              Build.
+              <br />
+              Review.
+              <br />
+              Ship.
+            </h1>
+            <p>
+              One focused workspace for turning intent into working software.
+            </p>
+          </div>
+
+          <div className="login-identity-footer">
+            <span className="login-signal" aria-hidden />
+            <span>LOCAL WORKSPACE</span>
+            <span className="login-footer-rule" aria-hidden />
+            <span>FULL AUTO</span>
+          </div>
+        </section>
+
+        <section className="login-card">
+          <div className="login-card-topline">
+            <span>ACCOUNT ACCESS</span>
+            <span>G / 01</span>
+          </div>
+
+          <div className="login-card-heading">
+            <p className="login-card-kicker">
+              <LockKeyhole aria-hidden />
+              SECURE SIGN IN
+            </p>
+            <h2>Welcome back.</h2>
+            <p>Enter your Grox account to open the workspace.</p>
+          </div>
+
+          <div className="login-fields">
+            <label className="field">
+              <span>Username</span>
+              <Input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Your username"
+                disabled={busy}
+                autoComplete="username"
+                autoFocus
+                required
+              />
+            </label>
+            <label className="field">
+              <span>Password</span>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                disabled={busy}
+                autoComplete="current-password"
+                required
+              />
+            </label>
+          </div>
+
+          <button
+            type="button"
+            className="login-advanced-toggle"
+            aria-expanded={showAdvanced}
+            onClick={() => setShowAdvanced((v) => !v)}
+          >
+            <span>Connection settings</span>
+            <ChevronDown aria-hidden />
+          </button>
+          {showAdvanced ? (
+            <label className="field login-advanced-field">
+              <span>Server URL</span>
+              <Input
+                type="url"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder={DEFAULT_GROK_BASE_URL}
+                disabled={busy}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+          ) : null}
+          {error ? <div className="error-banner login-error">{error}</div> : null}
+          <Button
+            type="submit"
+            disabled={busy || !username.trim() || !password}
+            className="login-submit"
+          >
+            <span>{busy ? 'Signing in…' : 'Enter workspace'}</span>
+            <ArrowRight aria-hidden />
+          </Button>
+
+          <p className="login-footnote">
+            Your account session is used only to connect this Grox workspace.
+          </p>
+        </section>
       </form>
     </div>
   )

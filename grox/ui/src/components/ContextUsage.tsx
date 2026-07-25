@@ -59,7 +59,7 @@ export function ContextUsageDetail({
   if (!usage || !max) {
     return (
       <div className={cn('ctx-detail space-y-2', className)}>
-        <p className="text-xs leading-relaxed text-slate-500">
+        <p className="text-xs leading-relaxed text-neutral-500">
           Context usage appears after the first agent turn.
         </p>
         {canCompact ? (
@@ -114,7 +114,7 @@ export function ContextUsageDetail({
           })}
         </ul>
       ) : (
-        <p className="text-xs text-slate-500">No category breakdown available.</p>
+        <p className="text-xs text-neutral-500">No category breakdown available.</p>
       )}
       {usage.model ? (
         <div className="ctx-popover-meta muted">model · {usage.model}</div>
@@ -163,7 +163,7 @@ export function ContextUsageMeter({
       <div className={cn('ctx-meter-wrap', className)}>
         <Tooltip content="Context usage appears after the first agent turn">
           <div className="ctx-meter empty">
-            <Gauge className="h-3.5 w-3.5 text-slate-400" />
+            <Gauge className="h-3.5 w-3.5 text-neutral-500" />
             <span className="ctx-meter-label">Context</span>
             <span className="ctx-meter-pct muted">—</span>
           </div>
@@ -230,7 +230,7 @@ export function ContextUsageMeter({
         <Card className="ctx-popover shadow-lg">
           <CardHeader className="flex-row items-center justify-between space-y-0 p-3 pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <Gauge className="h-4 w-4 text-sky-600" />
+              <Gauge className="h-4 w-4 text-white" />
               Context window
             </CardTitle>
             <Badge

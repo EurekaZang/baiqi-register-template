@@ -123,7 +123,7 @@ async function createWindow(): Promise<void> {
     autoHideMenuBar: true,
     hasShadow: true,
     roundedCorners: true,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#080808',
     show: false,
     webPreferences: {
       preload: preloadPath,

@@ -21,12 +21,12 @@ const badgeVariants = cva(
         link: 'text-primary underline-offset-4 hover:underline',
         // App-specific aliases used across chat chrome
         accent:
-          'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300',
+          'border-neutral-600 bg-neutral-900 text-white',
         success:
-          'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
-        warn: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300',
+          'border-neutral-500 bg-white text-black',
+        warn: 'border-neutral-600 bg-neutral-800 text-neutral-200',
         danger:
-          'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300',
+          'border-white bg-black text-white',
       },
     },
     defaultVariants: {

@@ -336,14 +336,14 @@ function Bubble({
       <Card
         className={
           isUser
-            ? 'msg-card user-card border-slate-200 bg-white shadow-sm'
+            ? 'msg-card user-card border-neutral-700 bg-neutral-900 shadow-sm'
             : isCompactSummary
-              ? 'msg-card assistant-card compact-summary-card border-sky-100 bg-sky-50/40 shadow-none'
+              ? 'msg-card assistant-card compact-summary-card border-neutral-700 bg-neutral-900/60 shadow-none'
               : 'msg-card assistant-card border-transparent bg-transparent shadow-none'
         }
       >
         <CardHeader className="msg-card-header flex-row items-center justify-between space-y-0 p-3 pb-1">
-          <CardTitle className="msg-role text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+          <CardTitle className="msg-role text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">
             {isUser ? 'You' : isCompactSummary ? 'Compact summary' : 'Assistant'}
           </CardTitle>
           {!isUser && streaming ? (
@@ -467,7 +467,7 @@ export function MessageList({
         <div className="empty-state">
           <Card className="empty-card mx-auto max-w-[560px] text-left shadow-md">
             <CardHeader>
-              <CardDescription className="empty-kicker text-[11px] font-semibold uppercase tracking-[0.1em] text-sky-600">
+              <CardDescription className="empty-kicker text-[11px] font-semibold uppercase tracking-[0.1em] text-white">
                 Grox
               </CardDescription>
               <CardTitle className="empty-title text-xl tracking-tight">

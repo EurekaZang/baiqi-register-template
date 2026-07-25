@@ -36,7 +36,7 @@ export function Login({ onSuccess }: Props) {
     <div className="login-page">
       <form className="login-card" onSubmit={onSubmit}>
         <h1>
-          <span className="brand-accent">8090</span> Chat
+          <span className="brand-accent">Grox</span>
         </h1>
         <p className="muted">Enter the shared chat token to continue.</p>
         <label className="field">

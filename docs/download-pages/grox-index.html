@@ -1,388 +1,833 @@
-<!DOCTYPE html>
-<html lang="zh-CN" class="h-full">
+<!doctype html>
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>下载 Grox · Windows 桌面端</title>
-  <meta name="description" content="Grox — Windows 桌面编程 Agent。下载安装包，使用管理员分配的账号登录。" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <!-- 中文：思源宋体（标题）+ 思源黑体 / Noto Sans SC（正文）；英文数字由 Inter 点缀 -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" />
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: [
-              '"Noto Sans SC"',
-              'Inter',
-              '"PingFang SC"',
-              '"Hiragino Sans GB"',
-              '"Microsoft YaHei UI"',
-              '"Microsoft YaHei"',
-              'ui-sans-serif',
-              'system-ui',
-              'sans-serif',
-            ],
-            display: [
-              '"Noto Serif SC"',
-              '"Source Han Serif SC"',
-              '"Songti SC"',
-              'STSong',
-              'serif',
-            ],
-            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
-          },
-          colors: {
-            ink: {
-              50: '#f7f7f8',
-              100: '#ececf1',
-              200: '#d9d9e3',
-              300: '#c5c5d2',
-              400: '#8e8ea0',
-              500: '#6e6e80',
-              600: '#565869',
-              700: '#40414f',
-              800: '#343541',
-              900: '#202123',
-              950: '#0d0d0d',
-            },
-          },
-          boxShadow: {
-            soft: '0 0 0 1px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06)',
-            lift: '0 0 0 1px rgba(0,0,0,0.05), 0 8px 24px rgba(0,0,0,0.08)',
-          },
-          letterSpacing: {
-            tightish: '-0.02em',
-            cn: '0.04em',
-          },
-        },
-      },
-    };
-  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#050505" />
+  <meta name="color-scheme" content="dark" />
+  <title>Grox for Windows — Download</title>
+  <meta
+    name="description"
+    content="下载 Grox Windows 桌面端。一个专注于构建、审查与交付软件的本地编程工作区。"
+  />
+  <link rel="icon" type="image/svg+xml" href="./logo.svg" />
   <style>
-    html { scroll-behavior: smooth; }
-    body {
-      font-feature-settings: "ss01" on, "palt" on;
-      -webkit-font-smoothing: antialiased;
+    :root {
+      color-scheme: dark;
+      --bg: #050505;
+      --panel: #0d0d0d;
+      --panel-raised: #121212;
+      --line: #242424;
+      --line-strong: #3a3a3a;
+      --text: #f5f5f5;
+      --muted: #929292;
+      --quiet: #646464;
+      --white: #fff;
+      --black: #050505;
+      --max: 1180px;
+      font-family:
+        "Plus Jakarta Sans", "Noto Sans SC", "PingFang SC",
+        "Microsoft YaHei UI", Inter, ui-sans-serif, system-ui, sans-serif;
+      font-synthesis: none;
       text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
     }
-    .hero-grad {
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--bg); }
+    body {
+      min-width: 320px;
+      margin: 0;
+      overflow-x: hidden;
       background:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,0,0,0.035), transparent 60%),
-        #fff;
+        radial-gradient(circle at 74% 8%, rgba(255,255,255,.055), transparent 25rem),
+        var(--bg);
+      color: var(--text);
     }
-    .font-display {
-      font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", STSong, serif;
-      font-weight: 600;
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; }
+    ::selection { background: var(--white); color: var(--black); }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      opacity: .42;
+      background-image: radial-gradient(rgba(255,255,255,.09) .65px, transparent .65px);
+      background-size: 19px 19px;
+      mask-image: linear-gradient(to bottom, #000, transparent 68%);
     }
-    .tracking-cn-title {
-      letter-spacing: 0.06em;
+
+    .wrap {
+      width: min(calc(100% - 40px), var(--max));
+      margin-inline: auto;
     }
-    .tracking-cn-body {
-      letter-spacing: 0.02em;
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(255,255,255,.1);
+      background: rgba(5,5,5,.84);
+      backdrop-filter: blur(18px);
     }
-    .btn-openai {
-      transition: background-color .15s ease, transform .1s ease, box-shadow .15s ease;
+    .nav {
+      display: flex;
+      height: 68px;
+      align-items: center;
+      justify-content: space-between;
     }
-    .btn-openai:hover { transform: translateY(-1px); }
-    .btn-openai:active { transform: translateY(0); }
-    .btn-openai:focus-visible {
-      outline: 2px solid #0d0d0d;
-      outline-offset: 2px;
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 11px;
+      font-size: 17px;
+      font-weight: 750;
+      letter-spacing: -.02em;
     }
-    .fade-in {
-      animation: fadeIn .55s ease both;
+    .brand img {
+      width: 30px;
+      height: 30px;
+      object-fit: contain;
     }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: none; }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 7px;
     }
+    .nav-link {
+      padding: 9px 13px;
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      transition: color .16s ease, background .16s ease;
+    }
+    .nav-link:hover { color: var(--text); background: #151515; }
+
+    .button {
+      display: inline-flex;
+      min-height: 46px;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      padding: 0 19px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: -.01em;
+      transition: transform .16s ease, background .16s ease, border-color .16s ease;
+    }
+    .button:hover { transform: translateY(-1px); }
+    .button:active { transform: translateY(0); }
+    .button:focus-visible {
+      outline: 2px solid var(--white);
+      outline-offset: 3px;
+    }
+    .button-primary {
+      border-color: var(--white);
+      background: var(--white);
+      color: var(--black);
+    }
+    .button-primary:hover { border-color: #dedede; background: #dedede; }
+    .button-secondary { background: #111; color: var(--text); }
+    .button-secondary:hover { border-color: #5a5a5a; background: #181818; }
+    .button-small { min-height: 38px; border-radius: 10px; padding-inline: 15px; font-size: 13px; }
+    .button svg { width: 16px; height: 16px; }
+
+    .hero {
+      display: grid;
+      min-height: 690px;
+      grid-template-columns: minmax(0, .92fr) minmax(470px, 1.08fr);
+      align-items: center;
+      gap: 76px;
+      padding-block: 88px 94px;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      color: #b8b8b8;
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--white);
+      box-shadow: 0 0 0 4px rgba(255,255,255,.08);
+      content: "";
+    }
+    h1 {
+      max-width: 650px;
+      margin: 26px 0 0;
+      font-size: clamp(3.35rem, 6.35vw, 6.6rem);
+      font-weight: 770;
+      line-height: .91;
+      letter-spacing: -.068em;
+    }
+    .hero-copy {
+      max-width: 580px;
+      margin: 29px 0 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.85;
+    }
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 11px;
+      margin-top: 34px;
+    }
+    .release-line {
+      display: flex;
+      min-height: 25px;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-top: 19px;
+      color: var(--quiet);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+    }
+    .release-line .dot { width: 3px; height: 3px; border-radius: 50%; background: #555; }
+
+    .product-window {
+      overflow: hidden;
+      border: 1px solid #303030;
+      border-radius: 20px;
+      background: #090909;
+      box-shadow: 0 38px 110px rgba(0,0,0,.56);
+      transform: perspective(1300px) rotateY(-3deg) rotateX(1deg);
+      transform-origin: center;
+    }
+    .window-bar {
+      display: flex;
+      height: 47px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      padding: 0 15px;
+      background: #050505;
+    }
+    .window-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 720;
+    }
+    .window-brand img { width: 20px; height: 20px; }
+    .window-controls { display: flex; gap: 17px; color: #727272; font-size: 12px; }
+    .window-body { display: grid; min-height: 430px; grid-template-columns: 138px 1fr; }
+    .mock-sidebar {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--line);
+      padding: 17px 12px;
+      background: #0b0b0b;
+    }
+    .mock-logo {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      font-weight: 760;
+    }
+    .mock-logo img { width: 18px; height: 18px; }
+    .mock-label {
+      margin-top: 6px;
+      color: #666;
+      font-size: 8px;
+      letter-spacing: .09em;
+    }
+    .mock-new {
+      margin-top: 20px;
+      border-radius: 7px;
+      padding: 8px 4px;
+      background: #fff;
+      color: #050505;
+      text-align: center;
+      font-size: 9px;
+      font-weight: 760;
+    }
+    .mock-search {
+      margin-top: 8px;
+      border: 1px solid #272727;
+      border-radius: 7px;
+      padding: 8px;
+      color: #5f5f5f;
+      font-size: 8px;
+    }
+    .mock-session {
+      margin-top: 24px;
+      color: #666;
+      font-size: 8px;
+      letter-spacing: .08em;
+    }
+    .mock-chat {
+      margin-top: 11px;
+      color: #cecece;
+      font-size: 9px;
+    }
+    .mock-settings {
+      margin-top: auto;
+      color: #aaa;
+      font-size: 9px;
+    }
+    .mock-workspace { display: flex; min-width: 0; flex-direction: column; }
+    .mock-toolbar {
+      display: flex;
+      height: 63px;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--line);
+      padding: 0 15px;
+    }
+    .mock-title { margin-right: auto; font-size: 11px; font-weight: 720; }
+    .mock-pill, .mock-model {
+      border: 1px solid #292929;
+      border-radius: 7px;
+      padding: 7px 9px;
+      color: #aaa;
+      font-size: 8px;
+    }
+    .mock-stage {
+      display: grid;
+      flex: 1;
+      place-items: center;
+      padding: 24px;
+      background-image: radial-gradient(rgba(255,255,255,.075) .55px, transparent .55px);
+      background-size: 16px 16px;
+    }
+    .mock-card {
+      width: min(100%, 310px);
+      border: 1px solid #292929;
+      border-radius: 13px;
+      padding: 25px;
+      background: #111;
+      box-shadow: 0 20px 55px rgba(0,0,0,.4);
+    }
+    .mock-card-kicker { color: #bbb; font-size: 8px; font-weight: 720; letter-spacing: .13em; }
+    .mock-card h3 { margin: 14px 0 0; font-size: 17px; line-height: 1.28; letter-spacing: -.035em; }
+    .mock-card p { margin: 12px 0 0; color: #777; font-size: 8px; line-height: 1.7; }
+    .mock-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 15px; }
+    .mock-chips span { border: 1px solid #292929; border-radius: 999px; padding: 5px 7px; font-size: 7px; color: #b5b5b5; }
+    .mock-composer {
+      height: 73px;
+      margin: 0 15px 15px;
+      border: 1px solid #292929;
+      border-radius: 11px;
+      padding: 13px;
+      color: #686868;
+      font-size: 8px;
+    }
+
+    .section { border-top: 1px solid var(--line); padding-block: 92px; }
+    .section-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 30px;
+      margin-bottom: 38px;
+    }
+    .section-tag { margin: 0 0 12px; color: var(--quiet); font-size: 10px; font-weight: 750; letter-spacing: .17em; text-transform: uppercase; }
+    h2 { margin: 0; font-size: clamp(2rem, 4vw, 3.65rem); line-height: 1.02; letter-spacing: -.052em; }
+    .section-note { max-width: 440px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.8; }
+
+    .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .feature {
+      min-height: 238px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 25px;
+      background: rgba(13,13,13,.88);
+    }
+    .feature-index {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #6d6d6d;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 10px;
+      letter-spacing: .09em;
+    }
+    .feature-icon {
+      display: grid;
+      width: 31px;
+      height: 31px;
+      place-items: center;
+      border: 1px solid #303030;
+      border-radius: 9px;
+      color: #d5d5d5;
+    }
+    .feature-icon svg { width: 15px; height: 15px; }
+    .feature h3 { margin: 54px 0 0; font-size: 18px; letter-spacing: -.025em; }
+    .feature p { margin: 12px 0 0; color: var(--muted); font-size: 13px; line-height: 1.75; }
+
+    .install-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .install-card {
+      display: flex;
+      min-width: 0;
+      min-height: 372px;
+      flex-direction: column;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 30px;
+      background: var(--panel);
+    }
+    .card-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #6d6d6d;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 10px;
+      letter-spacing: .08em;
+    }
+    .tag {
+      border: 1px solid #303030;
+      border-radius: 999px;
+      padding: 5px 9px;
+      color: #a4a4a4;
+      letter-spacing: .04em;
+    }
+    .install-card h3 { margin: 27px 0 0; font-size: 27px; letter-spacing: -.04em; }
+    .install-card > p { margin: 13px 0 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
+    .steps { display: grid; gap: 12px; margin: 26px 0; padding: 0; list-style: none; }
+    .steps li { display: flex; align-items: center; gap: 11px; color: #c7c7c7; font-size: 13px; }
+    .step-number {
+      display: grid;
+      width: 23px;
+      height: 23px;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid #393939;
+      border-radius: 50%;
+      font-size: 9px;
+    }
+    .card-action { margin-top: auto; width: 100%; }
+    .card-links { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 13px; color: #707070; font-size: 11px; }
+    .card-links a:hover { color: #c9c9c9; }
+    .command {
+      position: relative;
+      margin-top: 28px;
+      overflow: hidden;
+      border: 1px solid #363636;
+      border-radius: 13px;
+      background: #050505;
+    }
+    .command-head {
+      display: flex;
+      height: 41px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #252525;
+      padding: 0 12px 0 15px;
+      color: #626262;
+      font-size: 9px;
+      letter-spacing: .1em;
+    }
+    .copy {
+      border: 0;
+      border-radius: 7px;
+      padding: 6px 9px;
+      background: #1b1b1b;
+      color: #bdbdbd;
+      cursor: pointer;
+      font-size: 10px;
+    }
+    .copy:hover { background: #282828; color: #fff; }
+    pre {
+      margin: 0;
+      overflow-x: auto;
+      padding: 22px 18px 25px;
+      color: #eee;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      white-space: pre;
+    }
+    .checksum {
+      margin-top: auto;
+      border-top: 1px solid #242424;
+      padding-top: 18px;
+      color: #686868;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 10px;
+      line-height: 1.7;
+      overflow-wrap: anywhere;
+    }
+
+    .requirements {
+      display: grid;
+      overflow: hidden;
+      grid-template-columns: repeat(4, 1fr);
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: var(--panel);
+    }
+    .requirement { min-height: 148px; padding: 24px; }
+    .requirement + .requirement { border-left: 1px solid var(--line); }
+    .requirement small { color: #666; font-size: 9px; font-weight: 720; letter-spacing: .14em; text-transform: uppercase; }
+    .requirement strong { display: block; margin-top: 28px; font-size: 15px; letter-spacing: -.02em; }
+    .requirement span { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+
+    footer { border-top: 1px solid var(--line); }
+    .footer-inner {
+      display: flex;
+      min-height: 110px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 25px;
+      color: #656565;
+      font-size: 11px;
+    }
+    .footer-links { display: flex; flex-wrap: wrap; gap: 20px; }
+    .footer-links a:hover { color: #bbb; }
+
+    .reveal {
+      animation: reveal .65s cubic-bezier(.2,.7,.2,1) both;
+    }
+    @keyframes reveal {
+      from { opacity: 0; transform: translateY(13px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 980px) {
+      .hero {
+        min-height: auto;
+        grid-template-columns: 1fr;
+        gap: 60px;
+        padding-block: 76px;
+      }
+      .hero-intro { max-width: 720px; }
+      .product-window { width: min(100%, 720px); transform: none; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .feature { min-height: 190px; }
+      .feature h3 { margin-top: 38px; }
+      .requirements { grid-template-columns: 1fr 1fr; }
+      .requirement:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
+      .requirement:nth-child(4) { border-top: 1px solid var(--line); }
+    }
+
+    @media (max-width: 720px) {
+      .wrap { width: min(calc(100% - 28px), var(--max)); }
+      .nav { height: 60px; }
+      .nav-link { display: none; }
+      .hero { gap: 46px; padding-block: 58px 66px; }
+      h1 { font-size: clamp(3.1rem, 17vw, 5.25rem); }
+      .hero-copy { margin-top: 23px; font-size: 15px; }
+      .hero-actions { align-items: stretch; flex-direction: column; }
+      .hero-actions .button { width: 100%; }
+      .product-window { border-radius: 14px; }
+      .window-body { min-height: 355px; grid-template-columns: 92px 1fr; }
+      .mock-sidebar { padding: 13px 8px; }
+      .mock-logo span, .mock-label { display: none; }
+      .mock-new { margin-top: 13px; font-size: 0; }
+      .mock-new::after { font-size: 8px; content: "+ New"; }
+      .mock-stage { padding: 15px; }
+      .mock-toolbar { padding: 0 10px; }
+      .mock-title { display: none; }
+      .mock-card { padding: 19px; }
+      .mock-card h3 { font-size: 14px; }
+      .section { padding-block: 70px; }
+      .section-heading { align-items: flex-start; flex-direction: column; margin-bottom: 29px; }
+      .install-grid { grid-template-columns: minmax(0, 1fr); }
+      .install-card { min-height: 360px; padding: 23px; }
+      .requirements { grid-template-columns: 1fr; }
+      .requirement + .requirement { border-top: 1px solid var(--line); border-left: 0; }
+      .requirement { min-height: 124px; }
+      .requirement strong { margin-top: 20px; }
+      .footer-inner { align-items: flex-start; flex-direction: column; justify-content: center; padding-block: 27px; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
-      .fade-in { animation: none; }
-      .btn-openai:hover { transform: none; }
+      html { scroll-behavior: auto; }
+      .reveal { animation: none; }
+      .button { transition: none; }
     }
-    .btn-primary {
-      --btn-color: #0d0d0d !important;
-      background-color: #0d0d0d !important;
-      border-color: #0d0d0d !important;
-      color: #fff !important;
-    }
-    .btn-primary:hover {
-      background-color: #2a2a2a !important;
-      border-color: #2a2a2a !important;
-    }
-    .btn-outline {
-      background: #fff !important;
-      border-color: #d9d9e3 !important;
-      color: #0d0d0d !important;
-    }
-    .btn-outline:hover {
-      background: #f7f7f8 !important;
-      border-color: #c5c5d2 !important;
-    }
-    .code-block { font-variant-ligatures: none; }
   </style>
 </head>
-<body class="h-full bg-white text-ink-950 font-sans tracking-cn-body">
-  <!-- 顶栏 -->
-  <header class="sticky top-0 z-40 border-b border-ink-100/80 bg-white/85 backdrop-blur-md">
-    <div class="mx-auto flex h-14 max-w-5xl items-center justify-between px-5 sm:px-6">
-      <a href="./" class="flex items-center gap-2.5 no-underline">
-        <img src="./logo.svg" width="28" height="28" alt="" class="h-7 w-7 rounded-[7px] shadow-soft" />
-        <span class="font-display text-[17px] tracking-cn-title text-ink-950">Grox</span>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="wrap nav">
+      <a class="brand" href="./" aria-label="Grox 下载首页">
+        <img src="./logo.svg" alt="" />
+        <span>Grox</span>
       </a>
-      <nav class="flex items-center gap-1 sm:gap-2">
-        <a href="#install" class="btn btn-ghost btn-sm hidden rounded-full px-3 font-normal text-ink-600 hover:bg-ink-50 hover:text-ink-950 sm:inline-flex">安装方式</a>
-        <a href="#requirements" class="btn btn-ghost btn-sm hidden rounded-full px-3 font-normal text-ink-600 hover:bg-ink-50 hover:text-ink-950 sm:inline-flex">运行环境</a>
-        <a id="nav-dl" href="./Grox-Setup-latest.exe" class="btn btn-primary btn-sm btn-openai rounded-full px-4 font-medium normal-case tracking-wide">下载</a>
+      <nav class="nav-links" aria-label="页面导航">
+        <a class="nav-link" href="#product">产品</a>
+        <a class="nav-link" href="#install">安装</a>
+        <a class="nav-link" href="#requirements">系统要求</a>
+        <a id="nav-download" class="button button-primary button-small" href="./Grox-Setup-latest.exe">
+          Download
+        </a>
       </nav>
     </div>
   </header>
 
   <main>
-    <!-- 主视觉 -->
-    <section class="hero-grad">
-      <div class="mx-auto max-w-5xl px-5 pb-16 pt-16 text-center sm:px-6 sm:pb-24 sm:pt-24">
-        <p class="fade-in text-[12px] font-medium tracking-[0.22em] text-ink-400">WINDOWS · 桌面端</p>
-        <h1 class="fade-in font-display mx-auto mt-5 max-w-2xl text-[2.4rem] leading-[1.25] tracking-cn-title text-ink-950 sm:text-[3.15rem] sm:leading-[1.22]" style="animation-delay:.05s">
-          下载 Grox
-        </h1>
-        <p class="fade-in mx-auto mt-6 max-w-xl text-[15px] leading-[1.85] text-ink-500 sm:text-base sm:leading-[1.9]" style="animation-delay:.1s">
-          运行在你电脑上的编程助手。使用管理员分配的账号登录即可，无需在客户端填写 API Key。
+    <section class="wrap hero" aria-labelledby="hero-title">
+      <div class="hero-intro reveal">
+        <p class="eyebrow">Grox for Windows</p>
+        <h1 id="hero-title">Build.<br />Review.<br />Ship.</h1>
+        <p class="hero-copy">
+          一个专注的桌面编程工作区。让 Grox 在你的本地项目中理解上下文、执行任务，并把想法交付为真正可用的软件。
         </p>
-
-        <div class="fade-in mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row" style="animation-delay:.16s">
-          <a id="btn-primary-dl" href="./Grox-Setup-latest.exe"
-             class="btn btn-primary btn-openai h-12 min-w-[220px] rounded-full px-7 text-[15px] font-medium normal-case tracking-wide shadow-soft">
-            <svg class="h-4 w-4 opacity-90" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M8.75 1.75a.75.75 0 0 0-1.5 0v6.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 1 0-1.06-1.06L8.75 8.44V1.75Z"/>
-              <path d="M3.5 9.75a.75.75 0 0 0-1.5 0V12A2.75 2.75 0 0 0 4.75 14.75h6.5A2.75 2.75 0 0 0 14 12V9.75a.75.75 0 0 0-1.5 0V12c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25V9.75Z"/>
+        <div class="hero-actions">
+          <a id="hero-download" class="button button-primary" href="./Grox-Setup-latest.exe">
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M10 2.5v10m0 0 3.75-3.75M10 12.5 6.25 8.75M3 14.5v1A1.5 1.5 0 0 0 4.5 17h11a1.5 1.5 0 0 0 1.5-1.5v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            下载 Windows 安装包
+            下载 Windows 版
           </a>
-          <a href="#install"
-             class="btn btn-outline btn-openai h-12 min-w-[180px] rounded-full border px-6 text-[15px] font-medium normal-case tracking-wide shadow-soft">
-            一行命令安装
-          </a>
+          <a class="button button-secondary" href="#install">查看安装方式</a>
         </div>
+        <div class="release-line" aria-live="polite">
+          <span id="release-status">正在读取最新版本</span>
+          <span class="dot" aria-hidden="true"></span>
+          <span>Windows 10 / 11 · x64</span>
+        </div>
+      </div>
 
-        <p id="status" class="fade-in mt-6 text-sm text-ink-400" style="animation-delay:.22s">正在检查最新版本…</p>
-        <p id="meta-line" class="mt-1.5 font-mono text-xs text-ink-300"></p>
+      <div class="product-window reveal" style="animation-delay:.1s" aria-label="Grox 产品界面预览">
+        <div class="window-bar">
+          <div class="window-brand"><img src="./logo.svg" alt="" /><span>Grox</span></div>
+          <div class="window-controls" aria-hidden="true"><span>—</span><span>□</span><span>×</span></div>
+        </div>
+        <div class="window-body">
+          <aside class="mock-sidebar">
+            <div class="mock-logo"><img src="./logo.svg" alt="" /><span>Grox</span></div>
+            <div class="mock-label">AGENT WORKSPACE</div>
+            <div class="mock-new">+ New chat</div>
+            <div class="mock-search">Search chats…</div>
+            <div class="mock-session">TODAY</div>
+            <div class="mock-chat">Product launch</div>
+            <div class="mock-settings">⚙ &nbsp; Settings</div>
+          </aside>
+          <div class="mock-workspace">
+            <div class="mock-toolbar">
+              <span class="mock-title">New chat</span>
+              <span class="mock-pill">Full auto</span>
+              <span class="mock-model">grok-4.5</span>
+            </div>
+            <div class="mock-stage">
+              <div class="mock-card">
+                <div class="mock-card-kicker">GROX</div>
+                <h3>Select a folder and ask Grox to work</h3>
+                <p>Pick a working directory, then send a task or try a suggestion.</p>
+                <div class="mock-chips">
+                  <span>Summarize project</span>
+                  <span>Find recent bugs</span>
+                  <span>Propose a refactor</span>
+                </div>
+              </div>
+            </div>
+            <div class="mock-composer">Message Grox…</div>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- 三点说明 -->
-    <section class="border-t border-ink-100">
-      <div class="mx-auto grid max-w-5xl gap-px bg-ink-100 sm:grid-cols-3">
-        <div class="bg-white px-6 py-9 sm:px-8">
-          <p class="font-display text-[13px] tracking-cn-title text-ink-400">壹</p>
-          <h2 class="mt-2.5 font-display text-[1.05rem] tracking-cn-title text-ink-950">账号登录</h2>
-          <p class="mt-3 text-[14px] leading-[1.85] text-ink-500">使用管理员开通的用户名与密码登录。客户端无需粘贴或保管 API Key。</p>
-        </div>
-        <div class="bg-white px-6 py-9 sm:px-8">
-          <p class="font-display text-[13px] tracking-cn-title text-ink-400">贰</p>
-          <h2 class="mt-2.5 font-display text-[1.05rem] tracking-cn-title text-ink-950">本地优先</h2>
-          <p class="mt-3 text-[14px] leading-[1.85] text-ink-500">以 Windows 原生应用运行，本地 Agent 进程协作；工作区文件保留在你的磁盘上。</p>
-        </div>
-        <div class="bg-white px-6 py-9 sm:px-8">
-          <p class="font-display text-[13px] tracking-cn-title text-ink-400">叁</p>
-          <h2 class="mt-2.5 font-display text-[1.05rem] tracking-cn-title text-ink-950">团队网关</h2>
-          <p class="mt-3 text-[14px] leading-[1.85] text-ink-500">默认连接团队模型服务<br /><span class="font-mono text-[12px] tracking-normal text-ink-700">kaggleyes.top/grokapi</span></p>
-        </div>
-      </div>
-    </section>
-
-    <!-- 安装 -->
-    <section id="install" class="border-t border-ink-100 bg-ink-50/50">
-      <div class="mx-auto max-w-5xl px-5 py-16 sm:px-6 sm:py-20">
-        <div class="max-w-2xl">
-          <h2 class="font-display text-[1.75rem] tracking-cn-title text-ink-950 sm:text-[2rem]">安装</h2>
-          <p class="mt-4 text-[15px] leading-[1.85] text-ink-500">
-            多数用户请使用安装包。熟悉命令行时可使用 PowerShell 一行安装。
+    <section id="product" class="section">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="section-tag">Designed for focused work</p>
+            <h2>从代码库到交付。</h2>
+          </div>
+          <p class="section-note">
+            Grox 把模型、上下文与本地工具放在一个克制的工作区里，让你保持对项目和变更的掌控。
           </p>
         </div>
-
-        <div class="mt-10 grid gap-5 lg:grid-cols-2">
-          <!-- 安装包 -->
-          <article class="rounded-2xl border border-ink-100 bg-white p-6 shadow-soft sm:p-8">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <p class="text-[11px] font-medium tracking-[0.18em] text-ink-400">推荐</p>
-                <h3 class="mt-2 font-display text-lg tracking-cn-title text-ink-950">Windows 安装包</h3>
-              </div>
-              <span class="badge badge-ghost rounded-full border border-ink-100 bg-ink-50 px-2.5 py-1 font-mono text-[11px] font-medium text-ink-600">.exe · NSIS</span>
+        <div class="feature-grid">
+          <article class="feature">
+            <div class="feature-index">
+              <span>01 / LOCAL</span>
+              <span class="feature-icon">
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2.5 5.5h5l1.5 2h8.5v7A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5v-9Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+              </span>
             </div>
-            <ol class="mt-6 space-y-4 text-[14px] leading-[1.8] text-ink-600">
-              <li class="flex gap-3">
-                <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-950 font-display text-[12px] text-white">1</span>
-                <span>下载 Windows 安装程序。</span>
-              </li>
-              <li class="flex gap-3">
-                <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-950 font-display text-[12px] text-white">2</span>
-                <span>运行安装。若出现 SmartScreen，选择<span class="text-ink-800">「更多信息 → 仍要运行」</span>。</span>
-              </li>
-              <li class="flex gap-3">
-                <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-950 font-display text-[12px] text-white">3</span>
-                <span>打开 Grox，使用管理员分配的账号登录。</span>
-              </li>
-            </ol>
-            <a id="btn-card-dl" href="./Grox-Setup-latest.exe"
-               class="btn btn-primary btn-openai mt-8 h-11 w-full rounded-full text-[14px] font-medium normal-case tracking-wide">
-              下载安装包
-            </a>
-            <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-400">
-              <a id="link-versioned" href="./Grox-Setup-0.1.1.exe" class="underline-offset-4 hover:text-ink-700 hover:underline">指定版本文件</a>
-              <a href="./latest.json" class="underline-offset-4 hover:text-ink-700 hover:underline">版本元数据</a>
-            </div>
+            <h3>本地工作区</h3>
+            <p>直接选择 Windows 文件夹开始任务。项目文件留在本机，Grox 围绕你的真实代码库工作。</p>
           </article>
-
-          <!-- PowerShell -->
-          <article class="rounded-2xl border border-ink-100 bg-white p-6 shadow-soft sm:p-8">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <p class="text-[11px] font-medium tracking-[0.18em] text-ink-400">PowerShell</p>
-                <h3 class="mt-2 font-display text-lg tracking-cn-title text-ink-950">一行命令安装</h3>
-              </div>
-              <span class="badge badge-ghost rounded-full border border-ink-100 bg-ink-50 px-2.5 py-1 text-[11px] font-medium text-ink-600">脚本</span>
+          <article class="feature">
+            <div class="feature-index">
+              <span>02 / AUTO</span>
+              <span class="feature-icon">
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m11.3 2.5-6.8 9h5.2l-1 6 6.8-9h-5.2l1-6Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+              </span>
             </div>
-            <p class="mt-4 text-[14px] leading-[1.85] text-ink-500">
-              自动获取最新版本；若发布了 SHA-256 则校验完整性，随后静默安装并尝试启动。
-            </p>
-            <div class="code-block relative mt-5 overflow-hidden rounded-xl border border-ink-800 bg-ink-950 p-4 text-left shadow-lift">
-              <pre id="ps-line" class="overflow-x-auto font-mono text-[12.5px] leading-relaxed tracking-normal text-ink-100 sm:text-[13px]">irm https://kaggleyes.top/downloads/grox/install.ps1 | iex</pre>
-              <button type="button" id="btn-copy"
-                      class="btn btn-sm absolute right-2 top-2 h-8 rounded-lg border-0 bg-white/10 px-2.5 text-xs font-medium text-white normal-case hover:bg-white/15">
-                复制
-              </button>
+            <h3>完整任务执行</h3>
+            <p>从理解需求到修改文件、运行命令和验证结果，在一个连续的任务流中完成。</p>
+          </article>
+          <article class="feature">
+            <div class="feature-index">
+              <span>03 / SECURE</span>
+              <span class="feature-icon">
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 8V6a5 5 0 0 1 10 0v2m-9 0h8a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 14 17H6a1.5 1.5 0 0 1-1.5-1.5v-6A1.5 1.5 0 0 1 6 8Z" stroke="currentColor" stroke-width="1.4"/></svg>
+              </span>
             </div>
-            <p class="mt-3 text-xs leading-[1.7] text-ink-400">
-              需要 Windows 10/11，并能访问本站。一般在普通 PowerShell 中即可运行（通常无需管理员）。
-            </p>
-            <a href="./install.ps1" class="mt-4 inline-flex text-sm font-medium text-ink-700 underline-offset-4 hover:underline">查看 install.ps1</a>
+            <h3>账号安全连接</h3>
+            <p>使用团队分配的 Grox 账号登录，无需在桌面客户端粘贴或保管底层 API Key。</p>
           </article>
         </div>
       </div>
     </section>
 
-    <!-- 环境要求 -->
-    <section id="requirements" class="border-t border-ink-100 bg-white">
-      <div class="mx-auto max-w-5xl px-5 py-16 sm:px-6 sm:py-20">
-        <h2 class="font-display text-[1.75rem] tracking-cn-title text-ink-950 sm:text-[2rem]">运行环境</h2>
-        <div class="mt-8 overflow-hidden rounded-2xl border border-ink-100 shadow-soft">
-          <table class="table w-full text-sm">
-            <tbody>
-              <tr class="border-b border-ink-100 hover:bg-ink-50/50">
-                <td class="w-36 px-5 py-4 font-medium text-ink-700 sm:w-44">操作系统</td>
-                <td class="px-5 py-4 leading-relaxed text-ink-500">Windows 10 或 11 · 64 位</td>
-              </tr>
-              <tr class="border-b border-ink-100 hover:bg-ink-50/50">
-                <td class="px-5 py-4 font-medium text-ink-700">账号</td>
-                <td class="px-5 py-4 leading-relaxed text-ink-500">由管理员分配的用户名与密码（free / plus / pro）</td>
-              </tr>
-              <tr class="border-b border-ink-100 hover:bg-ink-50/50">
-                <td class="px-5 py-4 font-medium text-ink-700">服务地址</td>
-                <td class="px-5 py-4 font-mono text-[13px] tracking-normal text-ink-500">https://kaggleyes.top/grokapi</td>
-              </tr>
-              <tr class="hover:bg-ink-50/50">
-                <td class="px-5 py-4 font-medium text-ink-700">磁盘空间</td>
-                <td class="px-5 py-4 leading-relaxed text-ink-500">约 400&nbsp;MB 可用空间（含本地 Agent 运行时）</td>
-              </tr>
-            </tbody>
-          </table>
+    <section id="install" class="section">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="section-tag">Get Grox</p>
+            <h2>选择安装方式。</h2>
+          </div>
+          <p class="section-note">推荐直接下载安装程序；也可以在 PowerShell 中执行一行命令完成校验、安装与启动。</p>
+        </div>
+        <div class="install-grid">
+          <article class="install-card">
+            <div class="card-meta">
+              <span>INSTALLER</span>
+              <span class="tag">RECOMMENDED</span>
+            </div>
+            <h3>Windows 安装包</h3>
+            <p>标准 NSIS 安装程序，适用于 Windows 10 和 Windows 11 64 位系统。</p>
+            <ol class="steps">
+              <li><span class="step-number">1</span><span>下载最新版本安装包</span></li>
+              <li><span class="step-number">2</span><span>运行安装程序并完成安装</span></li>
+              <li><span class="step-number">3</span><span>登录 Grox，选择工作目录</span></li>
+            </ol>
+            <a id="card-download" class="button button-primary card-action" href="./Grox-Setup-latest.exe">下载 .exe 安装包</a>
+            <div class="card-links">
+              <a id="versioned-download" href="./Grox-Setup-latest.exe">指定版本</a>
+              <a href="./latest.json">查看版本元数据</a>
+            </div>
+          </article>
+
+          <article class="install-card">
+            <div class="card-meta">
+              <span>POWERSHELL</span>
+              <span class="tag">ONE LINE</span>
+            </div>
+            <h3>命令行安装</h3>
+            <p>自动读取最新版本、验证 SHA-256、静默安装，并在完成后启动 Grox。</p>
+            <div class="command">
+              <div class="command-head">
+                <span>POWERSHELL</span>
+                <button id="copy-command" class="copy" type="button">复制</button>
+              </div>
+              <pre id="install-command">irm https://kaggleyes.top/downloads/grox/install.ps1 | iex</pre>
+            </div>
+            <div id="checksum" class="checksum">SHA-256 正在读取…</div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="requirements" class="section">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="section-tag">System requirements</p>
+            <h2>开箱即用。</h2>
+          </div>
+        </div>
+        <div class="requirements">
+          <div class="requirement"><small>Operating system</small><strong>Windows 10 / 11</strong><span>64 位桌面系统</span></div>
+          <div class="requirement"><small>Architecture</small><strong>x64</strong><span>Intel 或 AMD 处理器</span></div>
+          <div class="requirement"><small>Disk space</small><strong>约 400 MB</strong><span>包含本地 Agent 运行时</span></div>
+          <div class="requirement"><small>Account</small><strong>Grox 账号</strong><span>由团队管理员分配</span></div>
         </div>
       </div>
     </section>
   </main>
 
-  <footer class="border-t border-ink-100 bg-white">
-    <div class="mx-auto flex max-w-5xl flex-col gap-3 px-5 py-8 text-sm text-ink-400 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-      <p>© <span id="year"></span> Grox · 仅供授权团队使用</p>
-      <div class="flex flex-wrap gap-x-5 gap-y-1">
-        <a href="./latest.json" class="hover:text-ink-700">发布元数据</a>
-        <a href="https://kaggleyes.top/" class="hover:text-ink-700">kaggleyes.top</a>
+  <footer>
+    <div class="wrap footer-inner">
+      <span>© <span id="year"></span> Grox · Desktop coding agent</span>
+      <div class="footer-links">
+        <a href="./latest.json">Release metadata</a>
+        <a href="./install.ps1">install.ps1</a>
+        <a href="https://kaggleyes.top/">kaggleyes.top</a>
       </div>
     </div>
   </footer>
 
   <script>
-    (function () {
-      document.getElementById('year').textContent = String(new Date().getFullYear());
+    (() => {
+      const downloadTargets = [
+        document.getElementById("nav-download"),
+        document.getElementById("hero-download"),
+        document.getElementById("card-download"),
+      ];
+      const status = document.getElementById("release-status");
+      const checksum = document.getElementById("checksum");
+      const versioned = document.getElementById("versioned-download");
+      const copy = document.getElementById("copy-command");
+      const command = document.getElementById("install-command");
 
-      const statusEl = document.getElementById('status');
-      const metaEl = document.getElementById('meta-line');
-      const primary = document.getElementById('btn-primary-dl');
-      const navDl = document.getElementById('nav-dl');
-      const cardDl = document.getElementById('btn-card-dl');
-      const versioned = document.getElementById('link-versioned');
+      document.getElementById("year").textContent = new Date().getFullYear();
 
-      function setHref(url) {
-        [primary, navDl, cardDl].forEach((el) => { if (el) el.href = url; });
-      }
+      const formatBytes = (bytes) => {
+        if (!Number.isFinite(bytes) || bytes <= 0) return "";
+        return `${(bytes / 1024 / 1024).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
+      };
 
-      function formatBytes(n) {
-        if (!n || n <= 0) return '';
-        const mb = n / (1024 * 1024);
-        return mb >= 10 ? mb.toFixed(0) + ' MB' : mb.toFixed(1) + ' MB';
-      }
+      const setDownloadUrl = (url) => {
+        downloadTargets.forEach((target) => {
+          if (target) target.href = url;
+        });
+      };
 
-      async function loadMeta() {
+      const loadRelease = async () => {
         try {
-          const res = await fetch('./latest.json', { cache: 'no-store' });
-          if (!res.ok) throw new Error('latest.json ' + res.status);
-          const j = await res.json();
-          const url = (j.installer && j.installer.url) || './Grox-Setup-latest.exe';
-          const file = (j.installer && j.installer.filename) || 'Grox-Setup-latest.exe';
-          const ver = j.version || '';
-          const sha = (j.installer && j.installer.sha256) || '';
-          const size = (j.installer && j.installer.size_bytes) || 0;
+          const response = await fetch("./latest.json", { cache: "no-store" });
+          if (!response.ok) throw new Error(`latest.json ${response.status}`);
+          const release = await response.json();
+          const installer = release.installer || {};
+          const url = installer.url || "./Grox-Setup-latest.exe";
+          const filename = installer.filename || "Grox-Setup-latest.exe";
+          const version = release.version ? `v${release.version}` : "Latest";
+          const size = formatBytes(Number(installer.size_bytes));
+          const sha = installer.sha256 || "";
 
-          setHref(url);
-          if (versioned && file) {
-            versioned.href = './' + file;
-            versioned.textContent = file + (ver ? ' · v' + ver : '');
-          }
-
-          let ok = false;
-          try {
-            const h = await fetch(url, { method: 'HEAD', cache: 'no-store' });
-            ok = h.ok;
-          } catch (_) {
-            ok = false;
-          }
-
-          if (ok) {
-            statusEl.textContent = '最新版本可用' + (ver ? ' · v' + ver : '');
-            statusEl.className = 'fade-in mt-6 text-sm font-medium text-emerald-700';
-            const bits = [];
-            if (formatBytes(size)) bits.push(formatBytes(size));
-            if (sha) bits.push('sha256 ' + sha.slice(0, 12) + '…');
-            metaEl.textContent = bits.join(' · ');
-          } else {
-            statusEl.textContent = '已找到版本信息，但安装包暂时无法访问。';
-            statusEl.className = 'fade-in mt-6 text-sm font-medium text-amber-700';
-          }
-        } catch (e) {
-          statusEl.textContent = '无法加载版本信息，仍可尝试下方直接下载链接。';
-          statusEl.className = 'fade-in mt-6 text-sm text-ink-400';
+          setDownloadUrl(url);
+          status.textContent = [version, size, "Ready to download"].filter(Boolean).join(" · ");
+          checksum.textContent = sha ? `SHA-256  ${sha}` : "SHA-256 暂未提供";
+          versioned.href = `./${filename}`;
+          versioned.textContent = `${filename} · ${version}`;
+        } catch (_) {
+          status.textContent = "Latest for Windows · Direct download";
+          checksum.textContent = "无法读取校验值，请稍后刷新页面";
         }
-      }
+      };
 
-      document.getElementById('btn-copy').addEventListener('click', async function () {
-        const text = document.getElementById('ps-line').textContent.trim();
+      copy.addEventListener("click", async () => {
+        const text = command.textContent.trim();
         try {
           await navigator.clipboard.writeText(text);
-          this.textContent = '已复制';
-          setTimeout(() => { this.textContent = '复制'; }, 1600);
+          copy.textContent = "已复制";
         } catch (_) {
-          this.textContent = '请手动选择复制';
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(command);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          copy.textContent = "请按 Ctrl+C";
         }
+        window.setTimeout(() => { copy.textContent = "复制"; }, 1800);
       });
 
-      loadMeta();
+      loadRelease();
     })();
   </script>
 </body>

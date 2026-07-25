@@ -64,8 +64,8 @@ function shortName(path: string): string {
 }
 
 function kindIcon(kind?: string) {
-  if (kind === 'image') return <ImageIcon className="h-3.5 w-3.5 text-sky-600" />
-  return <FileText className="h-3.5 w-3.5 text-slate-500" />
+  if (kind === 'image') return <ImageIcon className="h-3.5 w-3.5 text-white" />
+  return <FileText className="h-3.5 w-3.5 text-neutral-500" />
 }
 
 function extForMime(mime: string): string {

@@ -15,19 +15,19 @@ export function ReasoningBlock({ text, defaultOpen = false }: Props) {
       <Button
         type="button"
         variant="ghost"
-        className="reasoning-head h-auto w-full justify-start rounded-none px-3 py-2 hover:bg-slate-50"
+        className="reasoning-head h-auto w-full justify-start rounded-none px-3 py-2 hover:bg-neutral-900"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
-        <Sparkles className="h-3.5 w-3.5 text-violet-500" />
+        <Sparkles className="h-3.5 w-3.5 text-white" />
         <span className="reasoning-title">Reasoning</span>
         <span className="reasoning-meta muted">
           {open ? 'Hide' : 'Show'} · {text.split(/\s+/).filter(Boolean).length} words
         </span>
         {open ? (
-          <ChevronDown className="ml-auto h-3.5 w-3.5 text-slate-400" />
+          <ChevronDown className="ml-auto h-3.5 w-3.5 text-neutral-500" />
         ) : (
-          <ChevronRight className="ml-auto h-3.5 w-3.5 text-slate-400" />
+          <ChevronRight className="ml-auto h-3.5 w-3.5 text-neutral-500" />
         )}
       </Button>
       {open ? (

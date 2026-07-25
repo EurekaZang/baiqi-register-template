@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from claude_agent_sdk import (
     AgentDefinition,
@@ -56,6 +57,18 @@ router = APIRouter(dependencies=[Depends(require_token)])
 
 # session_id → active ClaudeSDKClient (for /stop interrupt)
 _active_clients: dict[str, ClaudeSDKClient] = {}
+
+EMPTY_FINAL_PLACEHOLDER = (
+    "I finished reasoning but the upstream model returned no final text or "
+    "tool call. Continuing."
+)
+EMPTY_FINAL_RECOVERY_PROMPT = (
+    "Your previous response ended without a usable final answer. Continue the "
+    "same task now: either provide the concrete final answer to the user's "
+    "original request or make the next required tool call. Do not mention this "
+    "recovery instruction."
+)
+MAX_EMPTY_FINAL_RECOVERIES = 2
 
 # Predefined subagents invokable via the Claude Agent SDK Agent tool.
 DEFAULT_SUBAGENTS: dict[str, AgentDefinition] = {
@@ -229,6 +242,46 @@ class TurnAccumulator:
     # True after token-level StreamEvent text was applied for the current
     # assistant message. Final AssistantMessage TextBlocks then skip re-add.
     streamed_via_partial: bool = False
+    # Claude CLI emits EMPTY_FINAL_PLACEHOLDER when a compatible upstream
+    # returns reasoning but neither final text nor a tool call.
+    needs_empty_final_recovery: bool = False
+    stream_text_filter_buffer: str = ""
+
+    def filter_stream_text(self, text: str, *, final: bool = False) -> str:
+        """Suppress the CLI empty-final placeholder without delaying normal text."""
+        self.stream_text_filter_buffer += text
+        if EMPTY_FINAL_PLACEHOLDER in self.stream_text_filter_buffer:
+            self.needs_empty_final_recovery = True
+            self.stream_text_filter_buffer = self.stream_text_filter_buffer.replace(
+                EMPTY_FINAL_PLACEHOLDER,
+                "",
+            )
+
+        if final:
+            output = self.stream_text_filter_buffer
+            self.stream_text_filter_buffer = ""
+            return output
+
+        # Hold only the suffix that could still grow into the placeholder.
+        pending = self.stream_text_filter_buffer
+        max_prefix = min(len(pending), len(EMPTY_FINAL_PLACEHOLDER) - 1)
+        keep = 0
+        for size in range(max_prefix, 0, -1):
+            if pending.endswith(EMPTY_FINAL_PLACEHOLDER[:size]):
+                keep = size
+                break
+        if keep:
+            output = pending[:-keep]
+            self.stream_text_filter_buffer = pending[-keep:]
+            return output
+        self.stream_text_filter_buffer = ""
+        return pending
+
+    def strip_empty_final_placeholder(self, text: str) -> str:
+        if EMPTY_FINAL_PLACEHOLDER not in text:
+            return text
+        self.needs_empty_final_recovery = True
+        return text.replace(EMPTY_FINAL_PLACEHOLDER, "")
 
     def add_text(self, text: str, *, from_partial: bool = False) -> None:
         if text:
@@ -801,7 +854,13 @@ def map_sdk_message(
                 from_partial=True,
             )
         if acc is not None:
-            acc.add_text(text, from_partial=True)
+            text = acc.filter_stream_text(text)
+            if text:
+                acc.add_text(text, from_partial=True)
+        elif EMPTY_FINAL_PLACEHOLDER in text:
+            text = text.replace(EMPTY_FINAL_PLACEHOLDER, "")
+        if not text:
+            return events
         events.append({"event": "text_delta", "data": {"text": text}})
         return events
 
@@ -827,6 +886,8 @@ def map_sdk_message(
             if isinstance(block, TextBlock):
                 text = block.text or ""
                 if skip_text:
+                    if acc is not None:
+                        acc.strip_empty_final_placeholder(text)
                     continue
                 if parent_id:
                     events.extend(
@@ -838,7 +899,10 @@ def map_sdk_message(
                     )
                     continue
                 if acc is not None:
+                    text = acc.strip_empty_final_placeholder(text)
                     acc.add_text(text)
+                else:
+                    text = text.replace(EMPTY_FINAL_PLACEHOLDER, "")
                 if text:
                     events.append({"event": "text_delta", "data": {"text": text}})
             elif isinstance(block, ToolUseBlock):
@@ -920,6 +984,11 @@ def map_sdk_message(
                         is_error=block.is_error,
                     )
                 )
+        if not parent_id and skip_text and acc is not None:
+            tail = acc.filter_stream_text("", final=True)
+            if tail:
+                acc.add_text(tail, from_partial=True)
+                events.append({"event": "text_delta", "data": {"text": tail}})
         if msg.error:
             err = f"Assistant error: {msg.error}"
             if acc is not None:
@@ -1027,9 +1096,24 @@ def claude_project_dir_for_cwd(cwd: str | None) -> Path | None:
         resolved = str(Path(cwd).expanduser().resolve())
     except Exception:
         resolved = str(cwd)
-    # Claude Code encodes absolute paths by replacing '/' with '-'.
-    slug = resolved.replace("/", "-")
+    # Claude Code encodes Windows drive separators and both path separators.
+    # Example: D:\Work\Demo -> D--Work-Demo.
+    slug = resolved.replace(":", "-").replace("\\", "-").replace("/", "-")
     return Path.home() / ".claude" / "projects" / slug
+
+
+def api_no_proxy_value(base_url: str) -> str:
+    """Keep the configured LLM host direct without changing the system proxy."""
+    hostname = urlsplit(base_url).hostname
+    required = [hostname, "127.0.0.1", "localhost"]
+    existing = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
+    values = [item.strip() for item in existing.split(",") if item.strip()]
+    seen = {item.lower() for item in values}
+    for item in required:
+        if item and item.lower() not in seen:
+            values.append(item)
+            seen.add(item.lower())
+    return ",".join(values)
 
 
 def is_resumable_sdk_session(sdk_session_id: str | None, cwd: str | None) -> bool:
@@ -1085,6 +1169,11 @@ def build_options(
     env: dict[str, str] = {
         "ANTHROPIC_BASE_URL": base_url,
     }
+    # Bypass any inherited HTTP proxy only for the API host. This leaves the
+    # user's proxy process and all unrelated proxy traffic untouched.
+    no_proxy = api_no_proxy_value(base_url)
+    env["NO_PROXY"] = no_proxy
+    env["no_proxy"] = no_proxy
     if settings.anthropic_api_key:
         os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
         env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
@@ -1304,26 +1393,49 @@ async def run_agent_turn(
         nonlocal client, done_emitted, done_payload
         async with factory(options=active_options) as client:
             register_client(session_id, client)
-            if isinstance(prompt, str):
-                await client.query(prompt)
-            else:
-                await client.query(prompt_as_sdk_query(prompt))
-            async for msg in client.receive_response():
-                if disconnect_check is not None:
-                    try:
-                        if await disconnect_check():
-                            await interrupt_session(session_id)
-                            break
-                    except Exception:
-                        pass
-                for event in map_sdk_message(msg, acc, session=session):
-                    if event["event"] == "done":
-                        done_emitted = True
-                        # Defer done until after context usage is fetched so the
-                        # UI gets a complete snapshot in one event when possible.
-                        done_payload = dict(event["data"] or {})
-                    else:
-                        yield event
+            active_prompt: Any = prompt
+            recovery_count = 0
+            while True:
+                acc.needs_empty_final_recovery = False
+                if isinstance(active_prompt, str):
+                    await client.query(active_prompt)
+                else:
+                    await client.query(prompt_as_sdk_query(active_prompt))
+                async for msg in client.receive_response():
+                    if disconnect_check is not None:
+                        try:
+                            if await disconnect_check():
+                                await interrupt_session(session_id)
+                                break
+                        except Exception:
+                            pass
+                    for event in map_sdk_message(msg, acc, session=session):
+                        if event["event"] == "done":
+                            done_emitted = True
+                            # Defer done until after context usage is fetched so the
+                            # UI gets a complete snapshot in one event when possible.
+                            done_payload = dict(event["data"] or {})
+                        else:
+                            yield event
+
+                if (
+                    acc.needs_empty_final_recovery
+                    and recovery_count < MAX_EMPTY_FINAL_RECOVERIES
+                ):
+                    recovery_count += 1
+                    done_emitted = False
+                    done_payload = None
+                    active_prompt = EMPTY_FINAL_RECOVERY_PROMPT
+                    continue
+                break
+
+            if acc.needs_empty_final_recovery:
+                message = (
+                    "grok-4.5 returned no final answer after automatic retries. "
+                    "Please retry this message."
+                )
+                acc.error_message = message
+                yield {"event": "error", "data": {"message": message}}
 
             # Still connected: pull /context-equivalent window breakdown.
             getter = getattr(client, "get_context_usage", None)

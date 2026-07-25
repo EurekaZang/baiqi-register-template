@@ -20,8 +20,11 @@ from fastapi.testclient import TestClient
 
 from app import agent_bridge
 from app.agent_bridge import (
+    EMPTY_FINAL_PLACEHOLDER,
+    EMPTY_FINAL_RECOVERY_PROMPT,
     TurnAccumulator,
     build_options,
+    claude_project_dir_for_cwd,
     finalize_turn,
     map_sdk_message,
     run_agent_turn,
@@ -93,7 +96,8 @@ def test_build_options_permission_mode_and_resume(monkeypatch, tmp_path):
 
     cwd = tmp_path / "proj"
     cwd.mkdir()
-    project_dir = Path.home() / ".claude" / "projects" / str(cwd.resolve()).replace("/", "-")
+    project_dir = claude_project_dir_for_cwd(str(cwd))
+    assert project_dir is not None
     project_dir.mkdir(parents=True, exist_ok=True)
     transcript = project_dir / "resume-me.jsonl"
     transcript.write_text("{}\n", encoding="utf-8")
@@ -148,7 +152,8 @@ def test_build_options_keeps_resume_when_transcript_exists(monkeypatch, tmp_path
 
     cwd = tmp_path / "proj"
     cwd.mkdir()
-    project_dir = Path.home() / ".claude" / "projects" / str(cwd.resolve()).replace("/", "-")
+    project_dir = claude_project_dir_for_cwd(str(cwd))
+    assert project_dir is not None
     project_dir.mkdir(parents=True, exist_ok=True)
     transcript = project_dir / "resume-me.jsonl"
     transcript.write_text("{}\n", encoding="utf-8")
@@ -309,6 +314,194 @@ async def test_run_agent_turn_with_fake_client(monkeypatch, tmp_path):
 
     # Registry cleared
     assert agent_bridge.get_active_client(sid) is None
+
+
+@pytest.mark.asyncio
+async def test_run_agent_turn_recovers_from_empty_final_placeholder(
+    monkeypatch,
+    tmp_path,
+):
+    sessions_dir = tmp_path / "sessions"
+    sessions_dir.mkdir()
+    monkeypatch.setattr(settings, "sessions_dir", sessions_dir)
+    monkeypatch.setattr(settings, "chat_default_model", "grok-4.5")
+    monkeypatch.setattr(settings, "chat_permission_mode", "bypassPermissions")
+    monkeypatch.setattr(settings, "anthropic_base_url", "http://127.0.0.1:8088")
+
+    cwd = tmp_path / "proj"
+    cwd.mkdir()
+    session = create_session(cwd=str(cwd), title="Recovery", model="grok-4.5")
+
+    rounds = [
+        [
+            AssistantMessage(
+                content=[TextBlock(text=EMPTY_FINAL_PLACEHOLDER)],
+                model="grok-4.5",
+            ),
+            ResultMessage(
+                subtype="success",
+                duration_ms=1,
+                duration_api_ms=1,
+                is_error=False,
+                num_turns=1,
+                session_id="sdk-recovery",
+                usage={"input_tokens": 1, "output_tokens": 23},
+            ),
+        ],
+        [
+            AssistantMessage(
+                content=[TextBlock(text="Hello! How can I help?")],
+                model="grok-4.5",
+            ),
+            ResultMessage(
+                subtype="success",
+                duration_ms=1,
+                duration_api_ms=1,
+                is_error=False,
+                num_turns=1,
+                session_id="sdk-recovery",
+                usage={"input_tokens": 2, "output_tokens": 6},
+            ),
+        ],
+    ]
+
+    class RecoveryClient(FakeClient):
+        def __init__(self, *, options=None):
+            super().__init__([], options=options)
+            self.round = 0
+
+        async def receive_response(self):
+            messages = rounds[self.round]
+            self.round += 1
+            for message in messages:
+                yield message
+
+    fake = RecoveryClient()
+
+    def factory(*, options=None):
+        fake.options = options
+        return fake
+
+    events = [
+        event
+        async for event in run_agent_turn(
+            session["id"],
+            "hi",
+            client_factory=factory,
+        )
+    ]
+    text = "".join(
+        json.loads(event.data)["text"]
+        for event in events
+        if event.event == "text_delta"
+    )
+    assert text == "Hello! How can I help?"
+    assert EMPTY_FINAL_PLACEHOLDER not in text
+    assert fake.queries == ["hi", EMPTY_FINAL_RECOVERY_PROMPT]
+    assert [event.event for event in events].count("done") == 1
+
+    saved = get_session(session["id"])
+    assert saved["messages"][-1]["content"] == "Hello! How can I help?"
+    assert EMPTY_FINAL_PLACEHOLDER not in saved["messages"][-1]["content"]
+
+
+def test_claude_project_dir_encodes_windows_separators():
+    project_dir = claude_project_dir_for_cwd(r"D:\Work\Demo")
+    assert project_dir is not None
+    assert project_dir.name == "D--Work-Demo"
+
+
+def test_build_options_adds_api_host_to_no_proxy(monkeypatch):
+    monkeypatch.setattr(
+        settings,
+        "anthropic_base_url",
+        "https://kaggleyes.top/grokapi",
+    )
+    monkeypatch.setenv("NO_PROXY", "internal.example")
+    opts = build_options(
+        {"cwd": r"C:\\", "model": "grok-4.5", "sdk_session_id": None}
+    )
+    entries = opts.env["NO_PROXY"].split(",")
+    assert "internal.example" in entries
+    assert "kaggleyes.top" in entries
+    assert "127.0.0.1" in entries
+    assert opts.env["no_proxy"] == opts.env["NO_PROXY"]
+
+
+@pytest.mark.asyncio
+async def test_run_agent_turn_reports_error_after_4_5_recovery_limit(
+    monkeypatch,
+    tmp_path,
+):
+    sessions_dir = tmp_path / "sessions"
+    sessions_dir.mkdir()
+    monkeypatch.setattr(settings, "sessions_dir", sessions_dir)
+    monkeypatch.setattr(settings, "chat_default_model", "grok-4.5")
+    monkeypatch.setattr(settings, "chat_permission_mode", "bypassPermissions")
+    monkeypatch.setattr(settings, "anthropic_base_url", "http://127.0.0.1:8088")
+
+    cwd = tmp_path / "proj"
+    cwd.mkdir()
+    session = create_session(cwd=str(cwd), title="Fallback", model="grok-4.5")
+
+    placeholder_round = [
+        AssistantMessage(
+            content=[TextBlock(text=EMPTY_FINAL_PLACEHOLDER)],
+            model="grok-4.5",
+        ),
+        ResultMessage(
+            subtype="success",
+            duration_ms=1,
+            duration_api_ms=1,
+            is_error=False,
+            num_turns=1,
+            session_id="sdk-fallback",
+            usage={"input_tokens": 1, "output_tokens": 23},
+        ),
+    ]
+
+    class EmptyClient(FakeClient):
+        def __init__(self, *, options=None):
+            super().__init__([], options=options)
+
+        async def receive_response(self):
+            for message in placeholder_round:
+                yield message
+
+    fake = EmptyClient()
+
+    def factory(*, options=None):
+        fake.options = options
+        return fake
+
+    events = [
+        event
+        async for event in run_agent_turn(
+            session["id"],
+            "hi",
+            client_factory=factory,
+        )
+    ]
+    text = "".join(
+        json.loads(event.data)["text"]
+        for event in events
+        if event.event == "text_delta"
+    )
+    assert text == ""
+    assert fake.queries == [
+        "hi",
+        EMPTY_FINAL_RECOVERY_PROMPT,
+        EMPTY_FINAL_RECOVERY_PROMPT,
+    ]
+    errors = [
+        json.loads(event.data)["message"]
+        for event in events
+        if event.event == "error"
+    ]
+    assert errors == [
+        "grok-4.5 returned no final answer after automatic retries. "
+        "Please retry this message."
+    ]
 
 
 @pytest.mark.asyncio

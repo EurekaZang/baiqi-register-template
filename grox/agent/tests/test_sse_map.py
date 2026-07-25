@@ -15,6 +15,7 @@ from claude_agent_sdk import (
 )
 
 from app.agent_bridge import (
+    EMPTY_FINAL_PLACEHOLDER,
     TurnAccumulator,
     build_options,
     map_exception,
@@ -113,6 +114,40 @@ def test_final_assistant_text_skipped_after_partial_stream():
     assert acc.content_text() == "Hi!"
     # Flag resets so a later assistant message (after tools) can still stream.
     assert acc.streamed_via_partial is False
+
+
+def test_empty_final_placeholder_is_suppressed_across_stream_chunks():
+    acc = TurnAccumulator()
+    midpoint = len(EMPTY_FINAL_PLACEHOLDER) // 2
+    chunks = [
+        EMPTY_FINAL_PLACEHOLDER[:midpoint],
+        EMPTY_FINAL_PLACEHOLDER[midpoint:],
+    ]
+    events = []
+    for index, chunk in enumerate(chunks):
+        events.extend(
+            map_sdk_message(
+                StreamEvent(
+                    uuid=f"u{index}",
+                    session_id="sdk-empty",
+                    event={
+                        "type": "content_block_delta",
+                        "index": 0,
+                        "delta": {"type": "text_delta", "text": chunk},
+                    },
+                ),
+                acc,
+            )
+        )
+    final = AssistantMessage(
+        content=[TextBlock(text=EMPTY_FINAL_PLACEHOLDER)],
+        model="grok-4.5",
+    )
+    events.extend(map_sdk_message(final, acc))
+
+    assert events == []
+    assert acc.content_text() == ""
+    assert acc.needs_empty_final_recovery is True
 
 
 def test_build_options_enables_partial_messages():
